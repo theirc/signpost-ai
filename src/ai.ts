@@ -11,8 +11,6 @@ const anthropic = new Anthropic({})
 interface CompletionRequest {
   provider: Providers
   model: string
-  message: string
-  context?: string
   prompt?: string
   history?: ChatHistoryItem[]
   temperature?: number
@@ -32,9 +30,10 @@ function dedupeHistory(history: ChatHistoryItem[] = []): ChatHistoryItem[] {
     }
 
     if (last.role === h.role) {
-      last.content += h.content
+      last.content = last.content + "\n\n" + h.content + "\n\n"
       continue
     }
+    last = h
     finalhistory.push(h)
   }
 
@@ -43,21 +42,7 @@ function dedupeHistory(history: ChatHistoryItem[] = []): ChatHistoryItem[] {
 
 async function askOpenAI(r: CompletionRequest): Promise<BotReponse> {
 
-  let messages: ChatCompletionMessageParam[] = [
-    { role: 'system', content: r.prompt },
-  ]
-
-  if (r.context) {
-    messages.push({
-      role: 'user', content: `
-      Use this context for the conversation: 
-      <Context> 
-      ${r.context}
-      </Context>`
-    })
-  }
-
-  messages.push({ role: 'user', content: `${r.message}` })
+  let messages: ChatCompletionMessageParam[] = [...r.history] as any
 
   const chatCompletion = await openai.chat.completions.create({
     temperature: r.temperature || 0,
@@ -65,10 +50,8 @@ async function askOpenAI(r: CompletionRequest): Promise<BotReponse> {
     model: r.model,
   })
 
-  console.log(chatCompletion)
-
   const response: BotReponse = {
-    answer: chatCompletion.choices[0].message.content
+    answer: chatCompletion?.choices[0]?.message?.content || "",
   }
 
   return response

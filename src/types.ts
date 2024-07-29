@@ -58,4 +58,31 @@ declare global {
     isContacts?: boolean
   }
 
+  interface AILog {
+    id?: number
+    final_prompt?: string
+    date_created?: string
+    router_isContact?: boolean
+    router_searchTerms?: string
+    router_location?: string
+    router_language?: string
+    user_message?: string
+    bot?: number
+    search_results?: string
+    answer?: string
+    answer_constitutional?: string
+    error?: string
+    perfinit?: number | bigint
+    perfrouting?: number | bigint
+    perfsearch?: number | bigint
+    perfllmcall?: number | bigint
+    perfconstitutional?: number | bigint
+  }
+
+  interface Channel {
+    link?: string
+    title?: string
+    disable?: boolean
+  }
+
 }
