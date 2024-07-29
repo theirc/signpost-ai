@@ -7,7 +7,7 @@ import express, { Request } from 'express'
 import cors from 'cors'
 import morgan from 'morgan'
 
-const version = '1.0723.1224'
+const version = '1.0729.1607'
 
 const app = express()
 app.use(cors())
@@ -22,10 +22,11 @@ app.get('/', (req, res) => {
 
 app.post('/ai', async (req: Request<any, any, BotRequest>, res) => {
   try {
-    if (req.body.background || req.body.zendeskid) res.end()
+    const isBackground = (req.body.background || req.body.zendeskid)
+    if (isBackground) res.end()
     const bot = await Bot.fromId(req.body.id)
     const answer = await bot.execute(req.body)
-    res.send(answer)
+    if (!isBackground) res.send(answer)
   } catch (error) {
     console.log(`Error: ${error?.toString() ?? 'Unknown error'}`)
     res.status(500).send(error?.toString() ?? 'Unknown error')
