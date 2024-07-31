@@ -7,7 +7,7 @@ import express, { Request } from 'express'
 import cors from 'cors'
 import morgan from 'morgan'
 
-const version = '1.0729.1607'
+const version = '1.0731.1644'
 
 const app = express()
 app.use(cors())
