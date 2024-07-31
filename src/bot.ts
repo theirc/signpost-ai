@@ -33,7 +33,7 @@ export class Bot {
     const router = await schemas.create<RouterSchema>(message, routerSchema, "RouterSchema")
     if (!router && this.config.kbtype != "vectorless") {
       const e = { error: "Failed to route question" }
-      await this.logEvent(e)
+      await db.saveLog(e)
       return e
     }
     this.perfrouting = perf(this.perfrouting)
@@ -53,7 +53,7 @@ export class Bot {
 
     if (isContact && activeChannels.length > 0) {
       ailog.answer = "These are the communication channels:"
-      await this.logEvent(ailog)
+      await db.saveLog(ailog)
       return {
         isContacts: true,
         message: "These are the communication channels:",
@@ -131,7 +131,7 @@ export class Bot {
     ailog.search_results = sr
     ailog.answer = llmAnswer.answer
     ailog.answer_constitutional = censored
-    await this.logEvent(ailog)
+    await db.saveLog(ailog)
 
     const answer: Answer = {
       message: censored,
@@ -158,15 +158,7 @@ export class Bot {
     return chunks
   }
 
-  async logEvent(l: AILog) {
-    l.perfinit = this.perfinit
-    l.perfrouting = this.perfrouting
-    l.perfsearch = this.perfsearch
-    l.perfllmcall = this.perfllmcall
-    l.perfconstitutional = this.perfconstitutional
-    // ToDo: await db.items("botlogs").createOne(l)
 
-  }
 
   async runConstitutional(answer: string): Promise<string> {
     if (!this.config.constitution || !this.config.constitution.length) return answer

@@ -1,7 +1,8 @@
 import OpenAI from "openai"
 import Anthropic from "@anthropic-ai/sdk"
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions"
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { Content, GoogleGenerativeAI } from "@google/generative-ai"
+import { MessageParam } from "@anthropic-ai/sdk/resources/messages.mjs"
 
 const gemini = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY)
 const openai = new OpenAI({})
@@ -61,32 +62,60 @@ async function askOpenAI(r: CompletionRequest): Promise<BotReponse> {
 
 async function askOllama(r: CompletionRequest): Promise<BotReponse> {
 
+  let messages: ChatCompletionMessageParam[] = [...r.history] as any
 
-  return null
+  const chatCompletion = await ollama.chat.completions.create({
+    temperature: r.temperature || 0,
+    messages,
+    model: r.model,
+  })
+
+  const response: BotReponse = {
+    answer: chatCompletion?.choices[0]?.message?.content || "",
+  }
+
+  return response
 }
 
 async function askGemini(r: CompletionRequest): Promise<BotReponse> {
-  // const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-  return null
+  const model = gemini.getGenerativeModel({ model: r.model })
+
+  const contents: Content[] = r.history.map((h) => {
+    return {
+      role: h.role == "assistant" ? "model" : "user",
+      parts: [{ text: h.content }]
+    }
+  })
+
+  const answer = await model.generateContent({
+    contents,
+    generationConfig: {
+      temperature: r.temperature || 0,
+    },
+  })
+
+  const response: BotReponse = {
+    answer: answer.response.text() || ""
+  }
+
+  return response
 }
+
 async function askClaude(r: CompletionRequest): Promise<BotReponse> {
 
+  const messages: MessageParam[] = [{ role: "user", content: "Follow this instructions:" }, ...r.history as any]
 
-  // let textHistory = ""
-  // const messages: Anthropic.Messages.MessageParam[] = [{
-  //   role: 'user', content: "why the sky is blue?",
-  // }
-  // ]
-
-  // const message = await anthropic.messages.create({
-  //   max_tokens: 1024,
-  //   messages,
-  //   model: 'claude-3-opus-20240229',
-  // })
-  // console.log(message)
-
-  return null
+  const message = await anthropic.messages.create({
+    max_tokens: 1024,
+    temperature: r.temperature || 0,
+    messages,
+    model: r.model,
+  })
+  const response: BotReponse = {
+    answer: (message.content[0] as any)?.text || ""
+  }
+  return response
 }
 
 

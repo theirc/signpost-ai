@@ -41,8 +41,6 @@ declare global {
 
     llm?: Providers
     model?: string
-    modelgemini?: string
-    modelollama?: string
 
     enablehistory?: boolean
 
@@ -138,6 +136,19 @@ async function getBotConfig(id: number): Promise<BotConfig> {
   const linkedpropmpts = prompts.map(p => p.systemconstitution ?? null).filter(p => p).join("\n")
   if (linkedpropmpts) prompt = prompt + "\n" + linkedpropmpts + "\n"
 
+  const llm: Providers = b.llm as Providers
+  let model = ""
+
+  if (llm == "openai") {
+    model = b.model
+  } else if (llm == "gemini") {
+    model = b.modelgemini
+  } else if (llm == "claude") {
+    model = b.modelclaude
+  } else if (llm == "ollama") {
+    model = b.modelollama
+  }
+
   const bot: BotConfig = {
     id,
     title: b.title || '',
@@ -153,10 +164,8 @@ async function getBotConfig(id: number): Promise<BotConfig> {
     ignoredefaultconstitutional: b.ignoredefaultconstitutional as any || false,
     ignoredefaultprompt: b.ignoredefaultprompt as any || false,
     kbtype: b.kbtype as any || 'weaviate',
-    llm: b.llm as any || 'openai',
-    model: b.model || '',
-    modelgemini: b.modelgemini || '',
-    modelollama: b.modelollama || '',
+    llm,
+    model,
     prompt,
     temperature: Number(b.temperature) || 0,
     solinum: b.solinum as any || false,
@@ -283,32 +292,14 @@ async function getBots(): Promise<Promise<{ [index: number]: string }>> {
 
 
 async function saveLog(log: AILog) {
-
-
-  // const res2 = await db.clientProd.mutate({
-  //   variables: {
-  //     log
-  //   },
-  //   mutation: gql`
-  //   mutation  {
-  //     create_botlogs_items(data: create_botlogs_items_input) {
-  //       id
-  //       search_results
-  //       answer
-  //       answer_constitutional
-
-  //     }
-  //   }
-  //   `
-  // })
-
-
-
+  await dbk.insertInto("botlogs").values(log as any).execute()
 }
 
 export const db = {
+  saveLog,
   getBots,
   getBotConfig,
+
 }
 
 

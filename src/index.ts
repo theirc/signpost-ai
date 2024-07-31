@@ -28,18 +28,14 @@ app.post('/ai', async (req: Request<any, any, BotRequest>, res) => {
     const answer = await bot.execute(req.body)
     if (!isBackground) res.send(answer)
   } catch (error) {
+    const er = `Error: ${error?.toString() ?? 'Unknown error'}`
     console.log(`Error: ${error?.toString() ?? 'Unknown error'}`)
-    res.status(500).send(error?.toString() ?? 'Unknown error')
-  }
-})
-
-app.get('/buildzendesk', async (req, res) => {
-  try {
-    await zendesk.buildZendeskVectorsForDomain("signpost-tanzania")
-    res.send(`Import Sucessful`)
-  } catch (error) {
-    console.log(`Error: ${error?.toString() ?? 'Unknown error'}`)
-    res.status(500).send(error?.toString() ?? 'Unknown error')
+    const answer: Answer = {
+      message: er,
+      error: er,
+    }
+    res.send(answer)
+    // res.status(500).send(error?.toString() ?? 'Unknown error')
   }
 })
 
