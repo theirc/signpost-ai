@@ -4,7 +4,7 @@
   "scripts": {
     "gen": "kysely-codegen --out-file ./src/db/db.types.ts --exclude-pattern='_mig.*'",
     "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts"
+    "start": "tsx index.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.3",
