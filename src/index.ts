@@ -2,12 +2,11 @@ import 'dotenv/config'
 import "./types"
 import { Bot } from "./bot"
 import { db } from "./db"
-import { zendesk } from "./kbsources/"
 import express, { Request } from 'express'
 import cors from 'cors'
 import morgan from 'morgan'
 
-const version = '1.0731.1644'
+const version = '1.0805.1315'
 
 const app = express()
 app.use(cors())
@@ -35,7 +34,6 @@ app.post('/ai', async (req: Request<any, any, BotRequest>, res) => {
       error: er,
     }
     res.send(answer)
-    // res.status(500).send(error?.toString() ?? 'Unknown error')
   }
 })
 

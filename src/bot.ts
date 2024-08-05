@@ -1,6 +1,6 @@
 import { ai } from "./ai"
 import { db } from "./db"
-import { zendesk } from "./kbsources"
+import { zendesk } from "./sources"
 import { schemas } from "./schemas"
 import { routerSchema, RouterSchema } from "./schemas/rounterschema"
 import { vector } from "./vector/vector"

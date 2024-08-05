@@ -1,12 +1,6 @@
 export { }
 
 
-
-
-
-
-
-
 declare global {
 
   interface BotHistory {
