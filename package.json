@@ -9,7 +9,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.3",
     "@apollo/client": "^3.10.8",
+    "@directus/sdk": "^17.0.0",
     "@google/generative-ai": "^0.15.0",
+    "app": "file:",
     "axios": "^1.7.2",
     "cohere-ai": "^7.10.6",
     "cors": "^2.8.5",

@@ -5,6 +5,7 @@ import { db } from "./db"
 import express, { Request } from 'express'
 import cors from 'cors'
 import morgan from 'morgan'
+import { getFiles } from './syncingFilesFromAPI'
 
 const version = '1.0805.1315'
 
@@ -48,7 +49,8 @@ app.get('/bots/', async (req, res) => {
 })
 
 
-app.listen(3000, () => {
+app.listen(3000, async () => {
+  await getFiles();
   console.log(`Server version ${version} running on port ${3000}`)
 })
 

@@ -16,7 +16,8 @@ const dialect = new MysqlDialect({
 export const dbk = new Kysely<DB>({ dialect, log: ["query"] })
 
 async function getRelated<JunctionTable extends keyof DB, RelatedTable extends keyof DB>(id: number, table: JunctionTable, tableId: keyof DB[JunctionTable], related: RelatedTable, relatedId: keyof DB[JunctionTable]): Promise<DB[RelatedTable][]> {
-  const joint = await dbk.selectFrom(table).where(tableId as any, '=', id).select(`${relatedId as string} as id` as any).execute()
+  const joint = await dbk.selectFrom(table).where(tableId as any, '=', id).select(`${relatedId as string} as id` as any).execute() 
+  if (joint.length == 0) return []
   const dest = await dbk.selectFrom(related).where("id" as any, "in", joint.map((x: any) => x.id)).selectAll().execute()
   return dest as any || []
 }
