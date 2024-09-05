@@ -6,7 +6,7 @@ import { MessageParam } from "@anthropic-ai/sdk/resources/messages.mjs"
 
 const gemini = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY)
 const openai = new OpenAI({})
-const ollama = new OpenAI({ baseURL: "http://57.152.89.100:11434/v1/" })
+const ollama = new OpenAI({ baseURL: `${process.env.OLLAMA_HOST}/v1/` })
 const anthropic = new Anthropic({})
 
 interface CompletionRequest {

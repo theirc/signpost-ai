@@ -1,7 +1,6 @@
 import 'dotenv/config'
 import "./types"
 import { Bot } from "./bot"
-import { db } from "./db"
 import express, { Request } from 'express'
 import cors from 'cors'
 import morgan from 'morgan'
@@ -23,7 +22,7 @@ app.post('/ai', async (req: Request<any, any, BotRequest>, res) => {
   try {
     const isBackground = (req.body.background || req.body.zendeskid)
     if (isBackground) res.end()
-    const bot = await Bot.fromId(req.body.id)
+    const bot = Bot.fromConfig(req.body.config)
     const answer = await bot.execute(req.body)
     if (!isBackground) res.send(answer)
   } catch (error) {
@@ -34,16 +33,6 @@ app.post('/ai', async (req: Request<any, any, BotRequest>, res) => {
       error: er,
     }
     res.send(answer)
-  }
-})
-
-app.get('/bots/', async (req, res) => {
-  try {
-    res.send(await db.getBots())
-  } catch (error) {
-    console.log(`Error: ${error?.toString() ?? 'Unknown error'}`)
-    res.status(500).send(error?.toString() ?? 'Unknown error')
-    debugger
   }
 })
 

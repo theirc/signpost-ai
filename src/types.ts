@@ -3,13 +3,29 @@ export { }
 
 declare global {
 
-  interface BotHistory {
-    isHuman: boolean
-    message: string
+  type Providers = "openai" | "gemini" | "claude" | "ollama"
+  type Roles = "user" | "assistant"
+
+
+  interface BotConfig {
+
+    kbtype: "weaviate" | "vectorless"
+
+    temperature?: number
+    prompt?: string
+
+    llm?: Providers
+    model?: string
+
+    searchDistance?: number
+    searchMaxresults?: number
+    searchDomains?: string[]
+
   }
 
+
   interface ChatHistoryItem {
-    role?: "user" | "assistant",
+    role?: Roles
     content?: string
   }
 
@@ -17,8 +33,8 @@ declare global {
   interface BotRequest {
     id?: number
     message?: string
-    history?: BotHistory[]
-    chunked?: boolean
+    history?: ChatHistoryItem[]
+    config: BotConfig
     zendeskid?: number
     background?: boolean
   }
@@ -44,34 +60,10 @@ declare global {
 
   interface Answer {
     message?: string
-    chunked?: string[]
     docs?: Doc[]
     error?: string
-    needsRebuild?: boolean
-    isAnswer?: boolean
-    isContacts?: boolean
   }
 
-  interface AILog {
-    id?: number
-    final_prompt?: string
-    date_created?: string
-    router_isContact?: boolean
-    router_searchTerms?: string
-    router_location?: string
-    router_language?: string
-    user_message?: string
-    bot?: number
-    search_results?: string
-    answer?: string
-    answer_constitutional?: string
-    error?: string
-    perfinit?: number | bigint
-    perfrouting?: number | bigint
-    perfsearch?: number | bigint
-    perfllmcall?: number | bigint
-    perfconstitutional?: number | bigint
-  }
 
   interface Channel {
     link?: string
