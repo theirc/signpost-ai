@@ -41,12 +41,7 @@ interface WeaviateResult {
   }[]
 }
 
-interface SearchParams {
-  query: string
-  domains?: string[]
-  distance?: number
-  limit?: number
-}
+
 
 async function connect(): Promise<WeaviateClient> {
   if (initClient) return initClient
@@ -250,7 +245,6 @@ async function search(p: SearchParams): Promise<Doc[]> {
       domain: r.properties.domain || "",
       origin: r.properties.origin,
     }
-    d.metadata = { ...d }
     docs.push(d)
   }
 

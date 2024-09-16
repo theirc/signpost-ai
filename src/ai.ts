@@ -3,14 +3,20 @@ import Anthropic from "@anthropic-ai/sdk"
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions"
 import { Content, GoogleGenerativeAI } from "@google/generative-ai"
 import { MessageParam } from "@anthropic-ai/sdk/resources/messages.mjs"
+import { createTypeScriptJsonValidator } from "typechat/ts"
+import { createJsonTranslator, createLanguageModel } from "typechat"
 
 const gemini = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY)
 const openai = new OpenAI({})
 const ollama = new OpenAI({ baseURL: `${process.env.OLLAMA_HOST}/v1/` })
 const anthropic = new Anthropic({})
 
+export const schemaModel = createLanguageModel({
+  OPENAI_MODEL: "gpt-4o",
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+})
+
 interface CompletionRequest {
-  provider: Providers
   model: string
   prompt?: string
   history?: ChatHistoryItem[]
@@ -118,24 +124,65 @@ async function askClaude(r: CompletionRequest): Promise<BotReponse> {
   return response
 }
 
+async function schema(input: string, schema: string): Promise<any> {
+  const validator = createTypeScriptJsonValidator<any>(schema, "Schema")
+  const translator = createJsonTranslator<any>(schemaModel, validator)
+  const routeresponse = await translator.translate(input)
+  if (routeresponse.success) return routeresponse.data
+  return null
+}
+
+
+/*
+
+Available Models:
+
+openai/gpt-4o
+openai/gpt-4o-mini
+openai/gpt-3.5-turbo
+
+gemini/gemini-1.5-flash
+gemini/gemini-1.5-pro
+gemini/gemini-1.0-pro
+
+anthropic/claude-3-5-sonnet-20240620
+anthropic/claude-3-opus-20240229
+anthropic/claude-3-sonnet-20240229
+anthropic/claude-3-haiku-20240307
+
+ollama/llama3
+ollama/gemma
+ollama/mistral
+ollama/phi3
+ollama/qwen
+
+*/
+
 
 async function request(r: CompletionRequest): Promise<BotReponse> {
 
   r.history = dedupeHistory(r.history)
 
-  if (r.provider == "openai") {
-    return askOpenAI(r)
-  } else if (r.provider == "ollama") {
-    return askOllama(r)
-  } else if (r.provider == "gemini") {
-    return askGemini(r)
-  } else if (r.provider == "claude") {
-    return askClaude(r)
+  let { model } = r
+
+  if (model.startsWith("openai/")) {
+    model = model.replace("openai/", "")
+    return askOpenAI({ ...r, model })
+  } else if (model.startsWith("gemini/")) {
+    model = model.replace("gemini/", "")
+    return askGemini({ ...r, model })
+  } else if (model.startsWith("anthropic/")) {
+    model = model.replace("anthropic/", "")
+    return askClaude({ ...r, model })
+  } else if (model.startsWith("ollama/")) {
+    model = model.replace("ollama/", "")
+    return askOllama({ ...r, model })
   }
 
 }
 
 export const ai = {
   request,
+  schema,
 }
 
