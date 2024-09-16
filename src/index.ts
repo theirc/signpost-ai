@@ -1,11 +1,12 @@
 import 'dotenv/config'
 import "./types"
-import { Bot } from "./bot"
 import express, { Request } from 'express'
 import cors from 'cors'
 import morgan from 'morgan'
+import { executeAgent } from './agents'
+import { test } from './tests/runtest'
 
-const version = '1.0805.1315'
+const version = '1.0916.1714'
 
 const app = express()
 app.use(cors())
@@ -18,24 +19,23 @@ app.get('/', (req, res) => {
   res.type("text").send(`Version ${version}`)
 })
 
-app.post('/ai', async (req: Request<any, any, BotRequest>, res) => {
+app.get('/test', async (req, res) => {
+  const response = await test()
+  res.send(response)
+})
+
+
+app.post('/agent', async (req: Request<any, any, Agent>, res) => {
+  let answer = req.body
   try {
-    const isBackground = (req.body.background || req.body.zendeskid)
-    if (isBackground) res.end()
-    const bot = Bot.fromConfig(req.body.config)
-    const answer = await bot.execute(req.body)
-    if (!isBackground) res.send(answer)
+    const response = await executeAgent(answer)
+    res.send(response)
   } catch (error) {
     const er = `Error: ${error?.toString() ?? 'Unknown error'}`
     console.log(`Error: ${error?.toString() ?? 'Unknown error'}`)
-    const answer: Answer = {
-      message: er,
-      error: er,
-    }
-    res.send(answer)
+    res.status(500).end()
   }
 })
-
 
 app.listen(3000, () => {
   console.log(`Server version ${version} running on port ${3000}`)

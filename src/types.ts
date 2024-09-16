@@ -1,42 +1,21 @@
+import "./types.agents"
 export { }
-
 
 declare global {
 
-  type Providers = "openai" | "gemini" | "claude" | "ollama"
-  type Roles = "user" | "assistant"
+  type LiteralUnion<KnownValues extends string> = (string & {}) | KnownValues
 
-
-  interface BotConfig {
-
-    kbtype: "weaviate" | "vectorless"
-
-    temperature?: number
-    prompt?: string
-
-    llm?: Providers
-    model?: string
-
-    searchDistance?: number
-    searchMaxresults?: number
-    searchDomains?: string[]
-
+  interface SearchParams {
+    provider?: "weaviate" | "exa"
+    query: string
+    domains?: string[]
+    distance?: number
+    limit?: number
   }
-
 
   interface ChatHistoryItem {
-    role?: Roles
+    role?: "user" | "assistant"
     content?: string
-  }
-
-
-  interface BotRequest {
-    id?: number
-    message?: string
-    history?: ChatHistoryItem[]
-    config: BotConfig
-    zendeskid?: number
-    background?: boolean
   }
 
   interface BotReponse {
@@ -55,20 +34,6 @@ declare global {
     origin?: string
     domain?: string
     country?: string
-    metadata?: Doc //compatibility
-  }
-
-  interface Answer {
-    message?: string
-    docs?: Doc[]
-    error?: string
-  }
-
-
-  interface Channel {
-    link?: string
-    title?: string
-    disable?: boolean
   }
 
 }
