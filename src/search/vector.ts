@@ -11,7 +11,7 @@ let initClient: WeaviateClient
 
 interface VectorItem extends Doc {
   ref?: string
-  origin: VectorItemOrigins
+  origin?: VectorItemOrigins
 }
 
 interface WeaviateResult {
@@ -253,13 +253,6 @@ async function search(p: SearchParams): Promise<Doc[]> {
 }
 
 export const vector = {
-  converters,
-  deleteAllDocumentsByDomain,
-  deleteAllDocumentsByRef,
-  deleteAllDocumentsByOrigin,
-  getCount,
-  fetchDocuments,
-  fetchReferences,
   upsertArticle,
   search,
 }
