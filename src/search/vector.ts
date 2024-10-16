@@ -11,7 +11,7 @@ let initClient: WeaviateClient
 
 interface VectorItem extends Doc {
   ref?: string
-  origin: VectorItemOrigins
+  origin?: VectorItemOrigins
 }
 
 interface WeaviateResult {
@@ -41,13 +41,7 @@ interface WeaviateResult {
   }[]
 }
 
-interface SearchParams {
-  query: string
-  domains?: string[]
-  countries?: string[]
-  distance?: number
-  limit?: number
-}
+
 
 async function connect(): Promise<WeaviateClient> {
   if (initClient) return initClient
@@ -66,6 +60,7 @@ async function connect(): Promise<WeaviateClient> {
     debugger
   }
 }
+
 
 async function createCollection() {
 
@@ -120,6 +115,7 @@ async function deleteAllDocumentsByOrigin(origin: VectorItemOrigins) {
   const response = await col.data.deleteMany(col.filter.byProperty('origin').equal(origin))
   console.log(`Deleted ${response.matches} documents`)
 }
+
 async function deleteAllDocumentsByDomain(domain: string) {
   console.log(`Deleting all Documents for domain ${domain}...`)
   const col = await getCollection()
@@ -216,7 +212,6 @@ async function search(p: SearchParams): Promise<Doc[]> {
 
   if (!p.query) return docs
 
-  p.countries = p.countries || []
   p.domains = p.domains || []
   p.distance = p.distance || 0.4
   p.limit = p.limit || 4
@@ -226,11 +221,9 @@ async function search(p: SearchParams): Promise<Doc[]> {
   let filterItems = [] as any
 
   if (p.domains.length > 0) filterItems.push(col.filter.byProperty('domain').containsAny(p.domains))
-  if (p.countries.length > 0) filterItems.push(col.filter.byProperty('country').containsAny(p.countries))
 
   let filters
   if (filterItems.length > 0) filters = Filters.or(...filterItems)
-
 
   const result: WeaviateResult = await col.query.nearText(p.query, {
     distance: p.distance,
@@ -253,7 +246,6 @@ async function search(p: SearchParams): Promise<Doc[]> {
       domain: r.properties.domain || "",
       origin: r.properties.origin,
     }
-    d.metadata = { ...d }
     docs.push(d)
   }
 
@@ -262,14 +254,9 @@ async function search(p: SearchParams): Promise<Doc[]> {
 }
 
 export const vector = {
-  converters,
-  deleteAllDocumentsByDomain,
-  deleteAllDocumentsByRef,
-  deleteAllDocumentsByOrigin,
-  getCount,
-  fetchDocuments,
-  fetchReferences,
   upsertArticle,
   search,
+  createCollection,
+  deleteCollections,
 }
 
