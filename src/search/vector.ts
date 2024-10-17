@@ -61,6 +61,7 @@ async function connect(): Promise<WeaviateClient> {
   }
 }
 
+
 async function createCollection() {
 
   const client = await connect()
@@ -255,5 +256,7 @@ async function search(p: SearchParams): Promise<Doc[]> {
 export const vector = {
   upsertArticle,
   search,
+  createCollection,
+  deleteCollections,
 }
 
