@@ -4,6 +4,8 @@ import express, { Request } from 'express'
 import cors from 'cors'
 import morgan from 'morgan'
 import { executeAgent } from './agents'
+import { getFiles } from './workers/syncingFilesFromAPI'
+import { getContent } from './workers/syncingContentFromAPI'
 
 const version = '1.0917.1552'
 
@@ -29,7 +31,9 @@ app.post('/agent', async (req: Request<any, any, Agent>, res) => {
   }
 })
 
-app.listen(3000, () => {
+app.listen(3000, async () => {
+  // await getFiles();
+  await getContent();
   console.log(`Server version ${version} running on port ${3000}`)
 })
 
