@@ -10,7 +10,7 @@ const getContent = async () => {
             return;
         }
 
-        const currentVersion = db.get('SELECT version FROM settings', (err: Error | null, row: any) => {
+        const currentVersion = db.get('SELECT version FROM settings WHERE id = 1', (err: Error | null, row: any) => {
             if (err) {
                 console.error(err.message);
                 return;
@@ -52,7 +52,12 @@ const getContent = async () => {
                             console.log(`Upserted article ${article.id} with engine ${engine.id}`)
                         })
                     }
-                })
+                });
+
+                db.run('UPDATE settings SET version = ?', response.data.version);
+            }
+            else {
+                console.log('No new content found');
             }
 
         } catch (error) {
