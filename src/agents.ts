@@ -2,7 +2,6 @@ import { workers } from "./workers"
 
 export async function executeAgent(a: Agent): Promise<any> {
 
-  a.title ||= ""
   a.variables ||= {}
   a.input ||= ""
   a.prompt ||= ""

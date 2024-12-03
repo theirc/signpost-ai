@@ -2,7 +2,7 @@ export { }
 
 type Operators = "=" | "!=" | "<" | "<=" | ">" | ">=" | "null" | "notnull" | "contains" | "notcontain" | "startswith" | "notstartswith" | "endswith" | "notendswith"
 type Members = "input" | "output" | "documents" | "prompt"
-type VariableTypes = "text" | "number" | "flag"
+type VariableTypes = "string" | "number" | "boolean" | "string[]" | "number[]"
 
 declare global {
 
@@ -12,24 +12,21 @@ declare global {
   type ReservedMembers = keyof Omit<Agent, "variables">
 
   type SchemaTypes = {
-    title?: string
     name: string
     type: VariableTypes
     prompt: string
   }
 
   interface Agent {
-    title?: string
-    workers: AgentWorker[]
     input: string
     prompt?: string
+    workers: AgentWorker[]
     history?: ChatHistoryItem[]
     documents?: Doc[]
     audio?: {
       content: string
       extension: string
     }
-    error?: string
     variables?: {
       [key: string]: any
     }

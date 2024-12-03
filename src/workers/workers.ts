@@ -50,7 +50,7 @@ export function generateTemplate(a: Agent, text: string, payload: object): strin
   for (const key in payload) {
     if (payload[key] == null) continue
     if (key in knownMembers) continue
-    text = text.replace(new RegExp(`{${key}}`, "gi"), a.variables[key])
+    text = text.replace(new RegExp(`{${key}}`, "gi"), payload[key])
   }
 
   return text
