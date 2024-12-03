@@ -14,12 +14,16 @@ async function execute(w: AgentWorker, a: Agent, payload: Payload) {
   `
   for (let s of w.schemas) {
     let type = ""
-    if (s.type == "flag") {
+    if (s.type == "boolean") {
       type = "boolean"
     } else if (s.type == "number") {
       type = "number"
-    } else if (s.type == "text") {
+    } else if (s.type == "number[]") {
+      type = "number[]"
+    } else if (s.type == "string") {
       type = "string"
+    } else if (s.type == "string[]") {
+      type = "string[]"
     } else {
       type = "any"
     }

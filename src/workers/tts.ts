@@ -15,4 +15,4 @@ async function execute(w: AgentWorker, a: Agent, payload: Payload) {
 
 }
 
-workers.ai = execute
+workers.tts = execute
