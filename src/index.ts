@@ -29,7 +29,7 @@ app.post('/agent', async (req: Request<any, any, Agent>, res) => {
   }
 })
 
-app.listen(5000, () => {
-  console.log(`Server version ${version} running on port ${5000}`)
+app.listen(3000, () => {
+  console.log(`Server version ${version} running on port ${3000}`)
 })
 
