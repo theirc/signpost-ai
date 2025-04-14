@@ -3,7 +3,7 @@ const exa = new Exa(process.env.EXA_API_KEY)
 
 export async function searchExa(q: SearchParams) {
 
-  const docs: Doc[] = []
+  const docs: VectorDocument[] = []
 
   const result = await exa.searchAndContents(
     q.query,
