@@ -10,7 +10,8 @@
       "request": "launch",
       "runtimeExecutable": "tsx",
       "runtimeArgs": [
-        "watch"
+        "watch",
+        "--preserve-symlinks",
       ],
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen",
