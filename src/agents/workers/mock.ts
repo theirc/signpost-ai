@@ -26,6 +26,9 @@ async function execute(worker: AIWorker, { debug }: AgentParameters) {
 
 export const mock: WorkerRegistryItem = {
   title: "Mock Data",
+  category: "debug",
+  type: "mock",
+  description: "This worker allows you to mock data for testing purposes.",
   execute,
   create,
   get registry() { return mock },

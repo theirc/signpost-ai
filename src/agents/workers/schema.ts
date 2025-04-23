@@ -91,6 +91,9 @@ async function execute(worker: AIWorker, p: AgentParameters) {
 
 export const schema: WorkerRegistryItem = {
   title: "Schema",
+  category: "generator",
+  type: "schema",
+  description: "This worker generates structured data based on a schema and the input.",
   execute,
   create,
   get registry() { return schema },

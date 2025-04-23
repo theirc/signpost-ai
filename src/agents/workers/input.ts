@@ -27,6 +27,9 @@ async function execute(worker: InputWorker, p: AgentParameters) {
 
 export const request: WorkerRegistryItem = {
   title: "Input",
+  category: "io",
+  type: "request",
+  description: "This worker serves as a schema of the request",
   execute,
   create,
   get registry() { return request },

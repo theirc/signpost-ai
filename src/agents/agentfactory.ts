@@ -66,6 +66,7 @@ export function createAgent(config: AgentConfig) {
       for (const key in workers) {
         const w = workers[key]
         w.executed = false
+        w.error = null
         for (const key in w.handles) {
           const h = w.handles[key]
           // if (h.persistent) continue
@@ -83,9 +84,9 @@ export function createAgent(config: AgentConfig) {
       p.apikeys ||= {}
       p.agent = agent
       console.log(`Executing agent '${agent.title}'`)
+      const worker = agent.getResponseWorker()
+      if (!worker) return
       try {
-        const worker = agent.getResponseWorker()
-        if (!worker) return
         await worker.execute(p)
       } catch (error) {
         console.error(error)

@@ -1,6 +1,7 @@
 import { ulid } from "ulid"
 // import { app } from "../app"
 import { loadAgent } from "./agentfactory"
+import { error } from "console"
 
 export const inputOutputTypes = {
   string: "Text",
@@ -65,6 +66,7 @@ export function buildWorker(w: WorkerConfig) {
     lastUpdate: 0,
     registry: null as WorkerRegistryItem,
     executed: false,
+    error: null as string,
 
     referencedAgent: null, //this cannot be typed because it causes circular references. Cast to Agent when needed
 
@@ -96,6 +98,7 @@ export function buildWorker(w: WorkerConfig) {
     fields,
 
     async execute(p: AgentParameters) {
+      worker.error = null
       if (worker.executed) return
       worker.executed = true
 
@@ -115,17 +118,27 @@ export function buildWorker(w: WorkerConfig) {
         }
       }
 
-
       p.agent.currentWorker = worker
       worker.updateWorker()
       p.agent.update()
 
-      await worker.registry.execute(worker, p)
+      worker.error = null
+
+      try {
+        await worker.registry.execute(worker, p)
+      } catch (error) {
+        error = error.toString()
+        worker.error = error
+        throw error
+      }
+
       p.agent.update()
 
       worker.updateWorker()
       p.agent.currentWorker = null
       p.agent.update()
+
+
     },
 
     async getValues(p: AgentParameters) {
