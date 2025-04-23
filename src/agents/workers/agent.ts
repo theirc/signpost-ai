@@ -46,6 +46,9 @@ async function execute(worker: AgentWorker, p: AgentParameters) {
 export const agentWorker: WorkerRegistryItem = {
   title: "Agent",
   execute,
+  category: "generator",
+  type: "agentWorker",
+  description: "This encapsulates an agent to be executed as a worker",
   create(agent: Agent) {
     return agent.initializeWorker(
       { type: "agentWorker" },

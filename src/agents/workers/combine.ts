@@ -48,6 +48,9 @@ async function execute(worker: CombineWorker) {
 export const combine: WorkerRegistryItem = {
   title: "Combine",
   execute,
+  category: "tool",
+  type: "combine",
+  description: "This worker allows you to combine two inputs into one output",
   create(agent: Agent) {
     const w = agent.initializeWorker(
       { type: "combine" },

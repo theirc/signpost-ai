@@ -29,6 +29,9 @@ async function execute(worker: AIWorker, p: AgentParameters) {
 
 export const response: WorkerRegistryItem = {
   title: "Response",
+  category: "io",
+  type: "response",
+  description: "This worker serves as a schema of the response",
   execute,
   create,
   get registry() { return response },
