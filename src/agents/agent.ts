@@ -12,6 +12,7 @@ declare global {
     deepseek?: string
     groq?: string
     xai?: string
+    zendesk?: string
   }
 
   interface AgentParameters {

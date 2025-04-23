@@ -55,9 +55,8 @@ function create(agent: Agent) {
 
 
 
-async function execute(worker: BotWorker, p: AgentParameters) {
+async function execute(worker: BotWorker, { apikeys }: AgentParameters) {
 
-  const apiKeys = p.apikeys
 
   let model: any = null
   const paramModel = worker.parameters.model || ""
@@ -67,14 +66,14 @@ async function execute(worker: BotWorker, p: AgentParameters) {
   const modelID = selModel[1]
 
   if (!provider || !modelID) {
-    p.error = "No model selected"
+    worker.error = "No model selected"
     return
   }
 
-  const apiKey = apiKeys[provider]
+  const apiKey = apikeys[provider]
 
   if (!apiKey) {
-    p.error = `No ${provider} API key found`
+    worker.error = `No ${provider} API key found`
     return
   }
 
@@ -87,7 +86,7 @@ async function execute(worker: BotWorker, p: AgentParameters) {
   } else if (provider === "deepseek") {
     model = createDeepSeek({ apiKey })(modelID)
   } else if (provider === "groq") {
-    model = createGroq({ apiKey: apiKeys.groq })(modelID)
+    model = createGroq({ apiKey })(modelID)
   } else if (provider === "xai") {
     model = createXai({ apiKey })(modelID)
   }
@@ -127,6 +126,9 @@ async function execute(worker: BotWorker, p: AgentParameters) {
 
 export const ai: WorkerRegistryItem = {
   title: "AI",
+  category: "generator",
+  type: "ai",
+  description: "This worker allows you to generate text using AI based on a prompt",
   execute,
   create,
   get registry() { return ai },

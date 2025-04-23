@@ -18,6 +18,9 @@ async function execute(worker: TextWorker) {
 export const text: WorkerRegistryItem = {
   title: "Text",
   execute,
+  category: "generator",
+  type: "text",
+  description: "This worker generates static text",
   create(agent: Agent) {
 
     return agent.initializeWorker(

@@ -15,6 +15,9 @@ async function execute(worker: AIWorker) {
 export const display: WorkerRegistryItem = {
   title: "Display",
   execute,
+  category: "debug",
+  type: "display",
+  description: "This worker allows you to display data for testing purposes.",
   create(agent: Agent) {
     return agent.initializeWorker(
       { type: "display" },
