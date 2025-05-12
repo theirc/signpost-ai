@@ -9,9 +9,8 @@ import { schema } from "./workers/schema"
 import { search } from "./workers/search"
 import { text } from "./workers/text"
 import { api } from "./workers/api"
-// import { stt } from "./workers/tts"
-// import { background } from "./workers/background"
-// import { condition } from "./workers/condition"
+import { documentSelector } from "./workers/documentselector"
+import { state } from "./workers/state"
 
 
 type WorkerCategories = "io" | "generator" | "debug" | "tool"
@@ -45,9 +44,11 @@ export const workerRegistry = {
 
   search,
   combine,
+  documentSelector,
 
   mock,
   display,
   api,
+  state,
 
 } satisfies { [index: string]: WorkerRegistryItem }

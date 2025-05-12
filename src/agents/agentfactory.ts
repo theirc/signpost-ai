@@ -2,13 +2,20 @@ import { supabase } from "./db"
 import { workerRegistry } from "./registry"
 import { buildWorker } from "./worker"
 import { ulid } from 'ulid'
+import { ApiWorker } from "./workers/api"
 
 
 interface AgentConfig {
   edges?: object
   id?: number
   title?: string
+  description?: string
+  type?: AgentTypes
   workers?: object
+}
+
+declare global {
+  type AgentTypes = "conversational" | "data"
 }
 
 
@@ -26,6 +33,10 @@ export function createAgent(config: AgentConfig) {
     edges,
     workers,
 
+    type: "data" as AgentTypes,
+    description: "",
+
+
     currentWorker: null as AIWorker,
     update() {
       //Used to update the UI in front end
@@ -42,6 +53,19 @@ export function createAgent(config: AgentConfig) {
         if (workers[key].config.type === "response") return workers[key]
       }
       return null
+    },
+    getEndAPIWorkers(p: AgentParameters) {
+      const apiWorkers: ApiWorker[] = []
+      for (const key in workers) {
+        const w = workers[key]
+        if (w.config.type !== "api") continue
+        const outputHandles = Object.values(w.handles).filter((h) => h.direction === "output")
+        if (outputHandles.length === 0) continue
+        const cw = w.getConnectedWokers(p)
+        if (cw.length === 0) continue
+        apiWorkers.push(w as any)
+      }
+      return apiWorkers
     },
 
     getInputWorker() {
@@ -85,9 +109,15 @@ export function createAgent(config: AgentConfig) {
       p.agent = agent
       console.log(`Executing agent '${agent.title}'`)
       const worker = agent.getResponseWorker()
-      if (!worker) return
+      const apiWorkers = agent.getEndAPIWorkers(p)
+      if (!worker && !apiWorkers.length) return
       try {
         await worker.execute(p)
+
+        for (const w of apiWorkers) {
+          await w.execute(p)
+        }
+
       } catch (error) {
         console.error(error)
         p.error = error.toString()
@@ -127,6 +157,8 @@ export function configureAgent(data: AgentConfig) {
 
   const workers: WorkerConfig[] = (data.workers || []) as any
   const agent = createAgent(data)
+  agent.type = data.type || "data"
+  agent.description = data.description || ""
 
   for (const w of workers) {
     const { handles, ...rest } = w
@@ -174,7 +206,9 @@ export async function saveAgent(agent: Agent) {
 
   const agentData: AgentConfig = {
     title: agent.title,
-    edges: agent.edges
+    description: agent.description,
+    type: agent.type,
+    edges: agent.edges,
   }
   const workerlist = []
 
