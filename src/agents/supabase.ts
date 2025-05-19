@@ -37,26 +37,78 @@ export type Database = {
       agents: {
         Row: {
           created_at: string
+          description: string | null
           edges: Json | null
           id: number
+          team_id: string | null
           title: string | null
+          type: Database["public"]["Enums"]["agent_types"] | null
           workers: Json | null
         }
         Insert: {
           created_at?: string
+          description?: string | null
           edges?: Json | null
           id?: number
+          team_id?: string | null
           title?: string | null
+          type?: Database["public"]["Enums"]["agent_types"] | null
           workers?: Json | null
         }
         Update: {
           created_at?: string
+          description?: string | null
           edges?: Json | null
           id?: number
+          team_id?: string | null
           title?: string | null
+          type?: Database["public"]["Enums"]["agent_types"] | null
           workers?: Json | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "agents_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_keys: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          key: string | null
+          team_id: string | null
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key?: string | null
+          team_id?: string | null
+          type: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key?: string | null
+          team_id?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_keys_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       bot_conversations: {
         Row: {
@@ -65,6 +117,7 @@ export type Database = {
           created_at: string | null
           id: string
           session_id: string | null
+          team_id: string | null
           user_message: string | null
         }
         Insert: {
@@ -73,6 +126,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           session_id?: string | null
+          team_id?: string | null
           user_message?: string | null
         }
         Update: {
@@ -81,6 +135,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           session_id?: string | null
+          team_id?: string | null
           user_message?: string | null
         }
         Relationships: [
@@ -89,6 +144,13 @@ export type Database = {
             columns: ["bot_id"]
             isOneToOne: false
             referencedRelation: "bots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_conversations_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -103,6 +165,7 @@ export type Database = {
           detected_location: string | null
           id: string
           search_term: string | null
+          team_id: string | null
           user_message: string | null
         }
         Insert: {
@@ -114,6 +177,7 @@ export type Database = {
           detected_location?: string | null
           id?: string
           search_term?: string | null
+          team_id?: string | null
           user_message?: string | null
         }
         Update: {
@@ -125,6 +189,7 @@ export type Database = {
           detected_location?: string | null
           id?: string
           search_term?: string | null
+          team_id?: string | null
           user_message?: string | null
         }
         Relationships: [
@@ -142,6 +207,13 @@ export type Database = {
             referencedRelation: "service_categories"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "bot_logs_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
         ]
       }
       bot_scores: {
@@ -151,10 +223,12 @@ export type Database = {
           category: string | null
           created_at: string
           id: string
+          log_id: string | null
           message: string | null
           question: string | null
           reporter: string | null
           score: string | null
+          team_id: string | null
         }
         Insert: {
           answer?: string | null
@@ -162,10 +236,12 @@ export type Database = {
           category?: string | null
           created_at?: string
           id?: string
+          log_id?: string | null
           message?: string | null
           question?: string | null
           reporter?: string | null
           score?: string | null
+          team_id?: string | null
         }
         Update: {
           answer?: string | null
@@ -173,10 +249,12 @@ export type Database = {
           category?: string | null
           created_at?: string
           id?: string
+          log_id?: string | null
           message?: string | null
           question?: string | null
           reporter?: string | null
           score?: string | null
+          team_id?: string | null
         }
         Relationships: [
           {
@@ -193,6 +271,20 @@ export type Database = {
             referencedRelation: "service_categories"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "bot_scores_log_id_fkey"
+            columns: ["log_id"]
+            isOneToOne: false
+            referencedRelation: "bot_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_scores_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
         ]
       }
       bot_system_prompts: {
@@ -202,6 +294,7 @@ export type Database = {
           id: string
           position: number | null
           system_prompt_id: string
+          team_id: string | null
         }
         Insert: {
           bot_id: string
@@ -209,6 +302,7 @@ export type Database = {
           id?: string
           position?: number | null
           system_prompt_id: string
+          team_id?: string | null
         }
         Update: {
           bot_id?: string
@@ -216,6 +310,7 @@ export type Database = {
           id?: string
           position?: number | null
           system_prompt_id?: string
+          team_id?: string | null
         }
         Relationships: [
           {
@@ -230,6 +325,13 @@ export type Database = {
             columns: ["system_prompt_id"]
             isOneToOne: false
             referencedRelation: "system_prompts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_system_prompts_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -249,6 +351,7 @@ export type Database = {
           name: string
           system_prompt: string | null
           system_prompt_id: string | null
+          team_id: string | null
           temperature: number | null
           translate_to_user_language: boolean | null
           updated_at: string | null
@@ -267,6 +370,7 @@ export type Database = {
           name: string
           system_prompt?: string | null
           system_prompt_id?: string | null
+          team_id?: string | null
           temperature?: number | null
           translate_to_user_language?: boolean | null
           updated_at?: string | null
@@ -285,6 +389,7 @@ export type Database = {
           name?: string
           system_prompt?: string | null
           system_prompt_id?: string | null
+          team_id?: string | null
           temperature?: number | null
           translate_to_user_language?: boolean | null
           updated_at?: string | null
@@ -302,6 +407,13 @@ export type Database = {
             columns: ["system_prompt_id"]
             isOneToOne: false
             referencedRelation: "system_prompts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bots_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
           {
@@ -348,18 +460,29 @@ export type Database = {
           created_at: string | null
           id: string
           name: string
+          team_id: string | null
         }
         Insert: {
           created_at?: string | null
           id?: string
           name: string
+          team_id?: string | null
         }
         Update: {
           created_at?: string | null
           id?: string
           name?: string
+          team_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "collections_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       live_data_elements: {
         Row: {
@@ -371,6 +494,7 @@ export type Database = {
           metadata: Json | null
           source_config_id: string
           status: string
+          team_id: string | null
           vector: string | null
           version: string
         }
@@ -383,6 +507,7 @@ export type Database = {
           metadata?: Json | null
           source_config_id: string
           status?: string
+          team_id?: string | null
           vector?: string | null
           version?: string
         }
@@ -395,6 +520,7 @@ export type Database = {
           metadata?: Json | null
           source_config_id?: string
           status?: string
+          team_id?: string | null
           vector?: string | null
           version?: string
         }
@@ -406,6 +532,13 @@ export type Database = {
             referencedRelation: "source_configs"
             referencedColumns: ["source"]
           },
+          {
+            foreignKeyName: "live_data_elements_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
         ]
       }
       models: {
@@ -415,6 +548,7 @@ export type Database = {
           model_id: string
           name: string
           provider: string | null
+          team_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -422,6 +556,7 @@ export type Database = {
           model_id: string
           name: string
           provider?: string | null
+          team_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -429,8 +564,17 @@ export type Database = {
           model_id?: string
           name?: string
           provider?: string | null
+          team_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "models_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       projects: {
         Row: {
@@ -473,20 +617,34 @@ export type Database = {
           description: string | null
           id: string
           name: string | null
+          permissions: Json[] | null
+          team_id: string | null
         }
         Insert: {
           created_at?: string
           description?: string | null
           id?: string
           name?: string | null
+          permissions?: Json[] | null
+          team_id?: string | null
         }
         Update: {
           created_at?: string
           description?: string | null
           id?: string
           name?: string | null
+          permissions?: Json[] | null
+          team_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "roles_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       service_categories: {
         Row: {
@@ -527,6 +685,7 @@ export type Database = {
           sitemap: string | null
           source: string
           subdomain: string | null
+          team_id: string | null
           type: string | null
           url: string | null
         }
@@ -544,6 +703,7 @@ export type Database = {
           sitemap?: string | null
           source: string
           subdomain?: string | null
+          team_id?: string | null
           type?: string | null
           url?: string | null
         }
@@ -561,6 +721,7 @@ export type Database = {
           sitemap?: string | null
           source?: string
           subdomain?: string | null
+          team_id?: string | null
           type?: string | null
           url?: string | null
         }
@@ -570,6 +731,13 @@ export type Database = {
             columns: ["source"]
             isOneToOne: true
             referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "source_configs_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -582,6 +750,7 @@ export type Database = {
           last_updated: string | null
           name: string
           tags: string[] | null
+          team_id: string | null
           type: string | null
           vector: string | null
         }
@@ -592,6 +761,7 @@ export type Database = {
           last_updated?: string | null
           name: string
           tags?: string[] | null
+          team_id?: string | null
           type?: string | null
           vector?: string | null
         }
@@ -602,8 +772,32 @@ export type Database = {
           last_updated?: string | null
           name?: string
           tags?: string[] | null
+          team_id?: string | null
           type?: string | null
           vector?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sources_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      states: {
+        Row: {
+          id: string
+          state: Json | null
+        }
+        Insert: {
+          id?: string
+          state?: Json | null
+        }
+        Update: {
+          id?: string
+          state?: Json | null
         }
         Relationships: []
       }
@@ -615,6 +809,7 @@ export type Database = {
           language: string | null
           name: string
           status: string | null
+          team_id: string | null
           updated_at: string | null
           version: string | null
         }
@@ -625,6 +820,7 @@ export type Database = {
           language?: string | null
           name: string
           status?: string | null
+          team_id?: string | null
           updated_at?: string | null
           version?: string | null
         }
@@ -635,10 +831,19 @@ export type Database = {
           language?: string | null
           name?: string
           status?: string | null
+          team_id?: string | null
           updated_at?: string | null
           version?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "system_prompts_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tags: {
         Row: {
@@ -679,6 +884,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_teams: {
+        Row: {
+          created_at: string
+          id: string
+          team_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          team_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          team_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_teams_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_teams_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           created_at: string
@@ -689,7 +930,6 @@ export type Database = {
           language: Json | null
           last_name: string | null
           location: string | null
-          password: string | null
           role: string | null
           status: string | null
           team: string | null
@@ -704,7 +944,6 @@ export type Database = {
           language?: Json | null
           last_name?: string | null
           location?: string | null
-          password?: string | null
           role?: string | null
           status?: string | null
           team?: string | null
@@ -719,7 +958,6 @@ export type Database = {
           language?: Json | null
           last_name?: string | null
           location?: string | null
-          password?: string | null
           role?: string | null
           status?: string | null
           team?: string | null
@@ -738,47 +976,6 @@ export type Database = {
             columns: ["team"]
             isOneToOne: false
             referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      workers: {
-        Row: {
-          agent: number | null
-          created_at: string
-          handles: Json | null
-          id: string
-          parameters: Json | null
-          type: string | null
-          x: number | null
-          y: number | null
-        }
-        Insert: {
-          agent?: number | null
-          created_at?: string
-          handles?: Json | null
-          id: string
-          parameters?: Json | null
-          type?: string | null
-          x?: number | null
-          y?: number | null
-        }
-        Update: {
-          agent?: number | null
-          created_at?: string
-          handles?: Json | null
-          id?: string
-          parameters?: Json | null
-          type?: string | null
-          x?: number | null
-          y?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workers_agent_fkey"
-            columns: ["agent"]
-            isOneToOne: false
-            referencedRelation: "agents"
             referencedColumns: ["id"]
           },
         ]
@@ -802,9 +999,7 @@ export type Database = {
         }[]
       }
       match_documents: {
-        Args: {
-          query_text: string
-        }
+        Args: { query_text: string }
         Returns: {
           id: string
           content: string
@@ -816,9 +1011,13 @@ export type Database = {
       similarity_search: {
         Args: {
           query_vector: string
+          target_collection_id: string
+          match_threshold: number
+          match_count: number
         }
         Returns: {
           id: string
+          name: string
           content: string
           similarity: number
           source_type: string
@@ -826,7 +1025,7 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      agent_types: "conversational" | "data"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -834,27 +1033,29 @@ export type Database = {
   }
 }
 
-type PublicSchema = Database[Extract<keyof Database, "public">]
+type DefaultSchema = Database[Extract<keyof Database, "public">]
 
 export type Tables<
-  PublicTableNameOrOptions extends
-    | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-        Database[PublicTableNameOrOptions["schema"]]["Views"])
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-      Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] &
-        PublicSchema["Views"])
-    ? (PublicSchema["Tables"] &
-        PublicSchema["Views"])[PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
         Row: infer R
       }
       ? R
@@ -862,20 +1063,22 @@ export type Tables<
     : never
 
 export type TablesInsert<
-  PublicTableNameOrOptions extends
-    | keyof PublicSchema["Tables"]
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
     | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
     : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
         Insert: infer I
       }
       ? I
@@ -883,20 +1086,22 @@ export type TablesInsert<
     : never
 
 export type TablesUpdate<
-  PublicTableNameOrOptions extends
-    | keyof PublicSchema["Tables"]
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
     | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
     : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
         Update: infer U
       }
       ? U
@@ -904,21 +1109,23 @@ export type TablesUpdate<
     : never
 
 export type Enums<
-  PublicEnumNameOrOptions extends
-    | keyof PublicSchema["Enums"]
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
     | { schema: keyof Database },
-  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = PublicEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
-    ? PublicSchema["Enums"][PublicEnumNameOrOptions]
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof PublicSchema["CompositeTypes"]
+    | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof Database },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof Database
@@ -927,6 +1134,17 @@ export type CompositeTypes<
     : never = never,
 > = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
   ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
-    ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+
+export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
+  public: {
+    Enums: {
+      agent_types: ["conversational", "data"],
+    },
+  },
+} as const

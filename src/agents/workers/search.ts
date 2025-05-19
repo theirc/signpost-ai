@@ -7,8 +7,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 // Initialize Supabase client using environment variables
 // IMPORTANT: Ensure SUPABASE_URL, SUPABASE_ANON_KEY, and OPENAI_API_KEY are set in the worker's environment
-const supabaseUrl = process.env.SUPABASE_URL
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY
+const supabaseUrl = process.env.VITE_SUPABASE_URL
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY
 const openaiApiKey = process.env.OPENAI_API_KEY
 
 let supabase: SupabaseClient

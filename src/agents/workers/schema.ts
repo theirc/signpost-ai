@@ -6,10 +6,11 @@ declare global {
   interface SchemaWorker extends AIWorker {
     fields: {
       input: NodeIO
+      json: NodeIO
       condition: NodeIO
     }
     parameters: {
-      temperature?: number
+      model?: string
     }
 
   }
@@ -18,17 +19,23 @@ declare global {
 function create(agent: Agent) {
 
   return agent.initializeWorker(
-    { type: "schema" },
+    {
+      type: "schema",
+      parameters: {
+        model: "gpt-4o",
+      },
+    },
     [
       { type: "string", direction: "input", title: "Input", name: "input" },
       { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
+      { type: "json", direction: "output", title: "JSON", name: "json", system: true },
     ],
     schema
   )
 
 }
 
-async function execute(worker: AIWorker, p: AgentParameters) {
+async function execute(worker: SchemaWorker, p: AgentParameters) {
 
   const handlers = worker.getUserHandlers()
   const input = worker.fields.input.value
@@ -49,6 +56,12 @@ async function execute(worker: AIWorker, p: AgentParameters) {
       type = "number"
     } else if (s.type == "string") {
       type = "string"
+    } else if (s.type == "string[]") {
+      type = "string[]"
+    } else if (s.type == "number[]") {
+      type = "number[]"
+    } else if (s.type == "enum") {
+      type = `${s.enum ? s.enum?.map((e) => `"${e}"`).join(" | ") : "string[]"}`
     } else {
       type = "any"
     }
@@ -69,8 +82,11 @@ async function execute(worker: AIWorker, p: AgentParameters) {
   }
   `
 
+  const OPENAI_MODEL = worker.parameters.model || "gpt-4o"
+  console.log("OPENAI_MODEL", OPENAI_MODEL)
+
   const schemaModel = createLanguageModel({
-    OPENAI_MODEL: "gpt-4o",
+    OPENAI_MODEL,
     OPENAI_API_KEY: p.apikeys.openai,
   })
 
@@ -78,13 +94,23 @@ async function execute(worker: AIWorker, p: AgentParameters) {
   const translator = createJsonTranslator<any>(schemaModel, validator)
   const routeresponse = await translator.translate(input)
 
+  const jsonout = {}
 
   if (routeresponse.success) {
     for (const key in routeresponse.data) {
       const h = handlers.find((h) => h.name == key)
-      if (h) worker.fields[h.name].value = routeresponse.data[key]
+      if (h) {
+        worker.fields[h.name].value = routeresponse.data[key]
+        if (worker.fields[h.name].value) {
+          jsonout[h.name] = worker.fields[h.name].value
+        }
+      }
     }
   }
+
+  worker.fields.json.value = jsonout
+
+
 
 }
 

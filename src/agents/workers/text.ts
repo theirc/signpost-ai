@@ -7,31 +7,52 @@ declare global {
     },
     parameters: {
       text?: string
+      contentType?: "text" | "number" | "audio" | "image" | "file"
+      contentUri?: string
+      numberValue?: number
     }
   }
 }
 
 async function execute(worker: TextWorker) {
-  worker.fields.output.value = worker.parameters.text || ""
+  const { contentType, text, contentUri, numberValue } = worker.parameters
+
+  switch (contentType) {
+    case "number":
+      worker.fields.output.value = numberValue !== undefined ? numberValue : 0
+      break
+    case "audio":
+    case "image":
+    case "file":
+      worker.fields.output.value = contentUri || ""
+      break
+    case "text":
+    default:
+      worker.fields.output.value = text || ""
+      break
+  }
 }
 
 export const text: WorkerRegistryItem = {
-  title: "Text",
+  title: "Content",
   execute,
   category: "generator",
   type: "text",
-  description: "This worker generates static text",
+  description: "This worker generates static content (text, numbers, audio, images, files)",
   create(agent: Agent) {
-
     return agent.initializeWorker(
-      { type: "text" },
+      {
+        type: "text",
+        parameters: {
+          contentType: "text",
+        },
+      },
       [
         { type: "string", direction: "output", title: "Output", name: "output" },
         { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
       ],
       text
     )
-
   },
   get registry() { return text },
 }

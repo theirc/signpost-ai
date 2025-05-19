@@ -18,6 +18,7 @@ declare global {
   interface AgentParameters {
     debug?: boolean
     input: any
+    uid?: string
     output?: any
     agent?: Agent
     error?: string

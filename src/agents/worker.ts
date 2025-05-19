@@ -1,25 +1,28 @@
 import { ulid } from "ulid"
-// import { app } from "../app"
 import { loadAgent } from "./agentfactory"
-import { error } from "console"
 
 export const inputOutputTypes = {
   string: "Text",
+  "string[]": "Text List",
   number: "Number",
+  "number[]": "Number List",
+  enum: "Enumeration",
   boolean: "Boolean",
   unknown: "Unknown",
   doc: "Documents",
   references: "References",
   chat: "Chat",
-  // audio: "Audio",
+  json: "JSON",
+  audio: "Audio",
   // image: "Image",
   // video: "Video",
-  execute: "Execute",
+  // execute: "Execute",
 }
 
 interface WorkerCondition {
-  operator?: "equals"
+  operator?: "equals" | "notEquals" | "gt" | "lt" | "gte" | "lte" | "between" | "contains" | "notContains"
   value?: any
+  value2?: any // For "between" operator
 }
 
 declare global {
@@ -36,11 +39,12 @@ declare global {
     prompt?: string
     direction: "output" | "input"
     type: IOTypes
+    enum?: string[]
     system?: boolean
     condition?: boolean
-    // persistent?: boolean
     value?: any
     default?: any
+    mock?: string | number
   }
 
   interface WorkerConfig {
@@ -109,7 +113,8 @@ export function buildWorker(w: WorkerConfig) {
       const cond = Object.values(worker.handles).filter(h => h.condition)[0]
       if (cond) {
         // console.log("Worker - Condition: ", cond)
-        if ((!!worker.condition.value) !== (!!cond.value)) {
+        const conditionMet = worker.evaluateCondition(cond.value)
+        if (!conditionMet) {
           console.log(`Worker ${w.type} - Condition not met`)
           worker.updateWorker()
           p.agent.currentWorker = null
@@ -133,19 +138,63 @@ export function buildWorker(w: WorkerConfig) {
       }
 
       p.agent.update()
-
       worker.updateWorker()
       p.agent.currentWorker = null
       p.agent.update()
 
+    },
 
+    evaluateCondition(condValue: any): boolean {
+      const { operator, value, value2 } = worker.condition
+
+      if (operator === "equals") {
+        return condValue === value
+      }
+
+      if (operator === "notEquals") {
+        return condValue !== value
+      }
+
+      // String operators
+      if (typeof condValue === "string" && typeof value === "string") {
+        if (operator === "contains") {
+          return condValue.includes(value)
+        }
+        if (operator === "notContains") {
+          return !condValue.includes(value)
+        }
+      }
+
+      // Number operators
+      if (typeof condValue === "number" && typeof value === "number") {
+        if (operator === "gt") {
+          return condValue > value
+        }
+        if (operator === "lt") {
+          return condValue < value
+        }
+        if (operator === "gte") {
+          return condValue >= value
+        }
+        if (operator === "lte") {
+          return condValue <= value
+        }
+        if (operator === "between" && typeof value2 === "number") {
+          return condValue >= value && condValue <= value2
+        }
+      }
+
+      // Boolean fallback (for backward compatibility)
+      return (!!value) === (!!condValue)
     },
 
     async getValues(p: AgentParameters) {
       const connw = worker.getConnectedWokers(p)
       for (const { worker, source, target } of connw) {
         await worker.execute(p)
-        target.value = source.value || target.default
+        if (target.value === undefined) {
+          target.value = source.value || target.default
+        }
       }
     },
 
@@ -165,6 +214,25 @@ export function buildWorker(w: WorkerConfig) {
         }
       }
       return connwh
+    },
+
+    getInputHandlersByName() {
+      const handlers: { [index: string]: NodeIO } = {}
+      for (const e of Object.values(worker.handles)) {
+        if (e.direction === "input") {
+          handlers[e.name] = e
+        }
+      }
+      return handlers
+    },
+    getOutputHandlersByName() {
+      const handlers: { [index: string]: NodeIO } = {}
+      for (const e of Object.values(worker.handles)) {
+        if (e.direction === "output") {
+          handlers[e.name] = e
+        }
+      }
+      return handlers
     },
 
     getConnectedHandler(h: NodeIO, curAgent: any) {
@@ -199,15 +267,19 @@ export function buildWorker(w: WorkerConfig) {
     },
 
     updateWorker() {
-      worker.lastUpdate = Date.now().valueOf()
+      worker.lastUpdate++ // = Date.now().valueOf()
     },
 
     addHandler(h: NodeIO): NodeIO {
       if (!h.id) h.id = ulid()
       w.handles[h.id] = h
       fields[h.name] = h
-      worker.lastUpdate = Date.now().valueOf()
+      worker.lastUpdate++ //= Date.now().valueOf()
       return h
+    },
+
+    createHandlerId() {
+      return ulid()
     },
 
     addHandlers(handlers: NodeIO[]) {
@@ -220,12 +292,20 @@ export function buildWorker(w: WorkerConfig) {
       if (w.handles[id]) {
         Object.assign(w.handles[id], h)
       }
-      worker.lastUpdate = Date.now().valueOf()
+      worker.lastUpdate++ // = Date.now().valueOf()
+    },
+
+    upsertHandler(id: string, h: Partial<NodeIO>) {
+      if (id) {
+        worker.updateHandler(id, h)
+      } else {
+        worker.addHandler(h as NodeIO)
+      }
     },
 
     deleteHandler(id: string) {
       delete w.handles[id]
-      worker.lastUpdate = Date.now().valueOf()
+      worker.lastUpdate++ // = Date.now().valueOf()
     },
 
     getUserHandlers() {
@@ -260,9 +340,3 @@ export function buildWorker(w: WorkerConfig) {
 
   return worker
 }
-
-
-
-
-
-

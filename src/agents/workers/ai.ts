@@ -39,7 +39,6 @@ function create(agent: Agent) {
       }
     },
     [
-      // { type: "execute", direction: "input", title: "Execute", name: "execute" },
       { type: "string", direction: "input", title: "Prompt", name: "prompt" },
       { type: "string", direction: "input", title: "Input", name: "input" },
       { type: "doc", direction: "input", title: "Documents", name: "documents" },
@@ -56,7 +55,6 @@ function create(agent: Agent) {
 
 
 async function execute(worker: BotWorker, { apikeys }: AgentParameters) {
-
 
   let model: any = null
   const paramModel = worker.parameters.model || ""
