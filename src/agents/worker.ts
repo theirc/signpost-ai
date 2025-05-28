@@ -13,15 +13,16 @@ export const inputOutputTypes = {
   references: "References",
   chat: "Chat",
   json: "JSON",
-  // audio: "Audio",
+  audio: "Audio",
   // image: "Image",
   // video: "Video",
   // execute: "Execute",
 }
 
 interface WorkerCondition {
-  operator?: "equals"
+  operator?: "equals" | "notEquals" | "gt" | "lt" | "gte" | "lte" | "between" | "contains" | "notContains"
   value?: any
+  value2?: any // For "between" operator
 }
 
 declare global {
@@ -43,6 +44,7 @@ declare global {
     condition?: boolean
     value?: any
     default?: any
+    mock?: string | number
   }
 
   interface WorkerConfig {
@@ -107,11 +109,16 @@ export function buildWorker(w: WorkerConfig) {
       await worker.getValues(p)
 
       console.log("Worker - Executing: ", w.type)
+      p.logWriter({
+        worker,
+        state: p.state,
+      })
 
       const cond = Object.values(worker.handles).filter(h => h.condition)[0]
       if (cond) {
         // console.log("Worker - Condition: ", cond)
-        if ((!!worker.condition.value) !== (!!cond.value)) {
+        const conditionMet = worker.evaluateCondition(cond.value)
+        if (!conditionMet) {
           console.log(`Worker ${w.type} - Condition not met`)
           worker.updateWorker()
           p.agent.currentWorker = null
@@ -139,6 +146,50 @@ export function buildWorker(w: WorkerConfig) {
       p.agent.currentWorker = null
       p.agent.update()
 
+    },
+
+    evaluateCondition(condValue: any): boolean {
+      const { operator, value, value2 } = worker.condition
+
+      if (operator === "equals") {
+        return condValue === value
+      }
+
+      if (operator === "notEquals") {
+        return condValue !== value
+      }
+
+      // String operators
+      if (typeof condValue === "string" && typeof value === "string") {
+        if (operator === "contains") {
+          return condValue.includes(value)
+        }
+        if (operator === "notContains") {
+          return !condValue.includes(value)
+        }
+      }
+
+      // Number operators
+      if (typeof condValue === "number" && typeof value === "number") {
+        if (operator === "gt") {
+          return condValue > value
+        }
+        if (operator === "lt") {
+          return condValue < value
+        }
+        if (operator === "gte") {
+          return condValue >= value
+        }
+        if (operator === "lte") {
+          return condValue <= value
+        }
+        if (operator === "between" && typeof value2 === "number") {
+          return condValue >= value && condValue <= value2
+        }
+      }
+
+      // Boolean fallback (for backward compatibility)
+      return (!!value) === (!!condValue)
     },
 
     async getValues(p: AgentParameters) {
@@ -293,9 +344,3 @@ export function buildWorker(w: WorkerConfig) {
 
   return worker
 }
-
-
-
-
-
-

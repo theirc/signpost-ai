@@ -37,6 +37,7 @@ export type Database = {
       agents: {
         Row: {
           created_at: string
+          debuguuid: string | null
           description: string | null
           edges: Json | null
           id: number
@@ -47,6 +48,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          debuguuid?: string | null
           description?: string | null
           edges?: Json | null
           id?: number
@@ -57,6 +59,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          debuguuid?: string | null
           description?: string | null
           edges?: Json | null
           id?: number
@@ -619,6 +622,7 @@ export type Database = {
           name: string | null
           permissions: Json[] | null
           team_id: string | null
+          teams_id: string[] | null
         }
         Insert: {
           created_at?: string
@@ -627,6 +631,7 @@ export type Database = {
           name?: string | null
           permissions?: Json[] | null
           team_id?: string | null
+          teams_id?: string[] | null
         }
         Update: {
           created_at?: string
@@ -635,6 +640,7 @@ export type Database = {
           name?: string | null
           permissions?: Json[] | null
           team_id?: string | null
+          teams_id?: string[] | null
         }
         Relationships: [
           {
@@ -924,6 +930,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          email: string | null
           first_name: string | null
           id: string
           language: Json | null
@@ -937,6 +944,7 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          email?: string | null
           first_name?: string | null
           id?: string
           language?: Json | null
@@ -950,6 +958,7 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          email?: string | null
           first_name?: string | null
           id?: string
           language?: Json | null

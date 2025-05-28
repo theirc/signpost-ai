@@ -7,8 +7,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 // Initialize Supabase client using environment variables
 // IMPORTANT: Ensure SUPABASE_URL, SUPABASE_ANON_KEY, and OPENAI_API_KEY are set in the worker's environment
-const supabaseUrl = process.env.SUPABASE_URL
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY
+const supabaseUrl = process.env.VITE_SUPABASE_URL
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY
 const openaiApiKey = process.env.OPENAI_API_KEY
 
 let supabase: SupabaseClient
@@ -130,7 +130,7 @@ declare global {
     parameters: {
       engine?: "weaviate" | "exa" | "supabase"
       maxResults?: number
-      domain?: string
+      domain?: string[]
       distance?: number
       collections?: string[]
     }
@@ -148,7 +148,7 @@ declare global {
     ref?: string
     title: string
     body: string
-    domain?: string
+    domain?: string[]
     source?: string
     locale?: string
     lat?: number
@@ -250,7 +250,7 @@ async function execute(worker: SearchWorker) {
 
   } else {
     // --- External Engine Search Path (Weaviate, Exa, etc.) --- 
-    const domain = worker.parameters.domain;
+    const domain = Array.isArray(worker.parameters.domain) ? worker.parameters.domain : [worker.parameters.domain];
     const limit = worker.parameters.maxResults || 5;
     const externalSearchDistance = worker.parameters.distance ?? 0.5; // Use distance, default 0.5
 
@@ -260,7 +260,7 @@ async function execute(worker: SearchWorker) {
         const externalSearchUrl = "https://directus-qa-support.azurewebsites.net/search"; // Assuming this URL handles different engines or we need logic here
         const r = await axios.post(externalSearchUrl, {
           query,
-          domains: [domain], // Pass domain in array
+          domains: domain, // Pass domain in array
           limit,
           distance: externalSearchDistance,
           // We might need to pass the 'engine' type to the backend if it handles multiple engines
@@ -317,7 +317,7 @@ export const search: WorkerRegistryItem = {
         { type: "references", direction: "output", title: "References", name: "references" },
 
         { type: "string", direction: "input", title: "Engine", name: "engine" },
-        { type: "string", direction: "input", title: "Domain", name: "domain" },
+        { type: "string[]", direction: "input", title: "Domain", name: "domain" },
         { type: "number", direction: "input", title: "Distance", name: "distance" },
         { type: "number", direction: "input", title: "Max Results", name: "maxResults" },
         { type: "string", direction: "input", title: "Collections", name: "collections" },

@@ -13,10 +13,13 @@ function create(agent: Agent) {
 }
 
 async function execute(worker: InputWorker, p: AgentParameters) {
+
   for (const key in worker.handles) {
     const h = worker.handles[key]
     h.value = p.input[h.name]
+    if (p.debug && !h.value) h.value = h.mock
   }
+
 }
 
 

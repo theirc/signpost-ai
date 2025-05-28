@@ -3,6 +3,7 @@ import { workerRegistry } from "./registry"
 import { buildWorker } from "./worker"
 import { ulid } from 'ulid'
 import { ApiWorker } from "./workers/api"
+import { z } from "zod"
 
 
 interface AgentConfig {
@@ -12,6 +13,8 @@ interface AgentConfig {
   description?: string
   type?: AgentTypes
   workers?: object
+  team_id?: string
+  debuguuid?: string
 }
 
 declare global {
@@ -32,8 +35,10 @@ export function createAgent(config: AgentConfig) {
     set title(v: string) { config.title = v },
     edges,
     workers,
+    displayData: false,
 
     type: "data" as AgentTypes,
+    debuguuid: config.debuguuid || "",
     description: "",
 
 
@@ -106,22 +111,41 @@ export function createAgent(config: AgentConfig) {
       p.input ||= {}
       p.output ||= {}
       p.apikeys ||= {}
+      p.state ||= {}
+      p.logWriter ||= () => { }
       p.agent = agent
+
+      if (p.debug && agent.debuguuid && !p.uid) {
+        p.uid = agent.debuguuid
+      }
+
+      const hasUid = p.uid && z.string().uuid().safeParse(p.uid).success
+
+      if (hasUid) {
+        const dbState = await supabase.from("states").select("*").eq("id", p.uid).single()
+        if (dbState.data) p.state = dbState.data.state || {}
+      }
+
       console.log(`Executing agent '${agent.title}'`)
+
       const worker = agent.getResponseWorker()
       const apiWorkers = agent.getEndAPIWorkers(p)
+
       if (!worker && !apiWorkers.length) return
+
       try {
         await worker.execute(p)
-
         for (const w of apiWorkers) {
           await w.execute(p)
         }
+
+        if (hasUid) await supabase.from("states").upsert({ id: p.uid, state: p.state || {} })
 
       } catch (error) {
         console.error(error)
         p.error = error.toString()
       }
+
       agent.currentWorker = null
       agent.update()
     },
@@ -202,13 +226,15 @@ export function configureAgent(data: AgentConfig) {
 
 }
 
-export async function saveAgent(agent: Agent) {
+export async function saveAgent(agent: Agent, team_id?: string) {
 
   const agentData: AgentConfig = {
     title: agent.title,
     description: agent.description,
     type: agent.type,
     edges: agent.edges,
+    team_id,
+    debuguuid: agent.debuguuid || "",
   }
   const workerlist = []
 
