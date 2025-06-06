@@ -3,6 +3,7 @@ import express, { Request } from 'express'
 import cors from 'cors'
 import morgan from 'morgan'
 import { agents } from './agents'
+import { supabase } from './agents/db'
 
 const version = '1.0415.1140'
 
@@ -12,20 +13,34 @@ app.use(express.urlencoded({ extended: true }))
 app.use(express.json())
 app.use(morgan("tiny"))
 
-const apikeys = {
-  openai: process.env.OPENAI_API_KEY,
-  anthropic: process.env.ANTHROPIC_API_KEY,
-  google: process.env.GOOGLE_API_KEY,
-}
-
 app.get('/', (req, res) => {
   res.type("text").send(`Version ${version}`)
 })
 
-app.post('/agent', async (req: Request<any, any, AgentParameters & { id: number }>, res) => {
+app.post('/agent', async (req: Request<any, any, AgentParameters & { id: number, team_id?: string }>, res) => {
   let input = req.body
   try {
     const a = await agents.loadAgent(input.id)
+    
+    let apikeys = {}
+    if (input.team_id) {
+      const { data, error } = await supabase
+        .from("api_keys")
+        .select("*")
+        .eq("team_id", input.team_id)
+      
+      if (error) {
+        console.error('Error fetching api keys:', error)
+      } else {
+        apikeys = data?.reduce<Record<string, string>>((acc, key) => {
+          if (key.type && key.key) {
+            acc[key.type] = key.key
+          }
+          return acc
+        }, {}) || {}
+      }
+    }
+
     const p: AgentParameters = {
       input,
       apikeys,

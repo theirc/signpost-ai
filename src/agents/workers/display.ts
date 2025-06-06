@@ -9,7 +9,9 @@ declare global {
 }
 
 async function execute(worker: AIWorker) {
+
   worker.fields.output.value = worker.fields.input.value
+
 }
 
 export const display: WorkerRegistryItem = {

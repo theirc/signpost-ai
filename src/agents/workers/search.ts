@@ -9,7 +9,6 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 // IMPORTANT: Ensure SUPABASE_URL, SUPABASE_ANON_KEY, and OPENAI_API_KEY are set in the worker's environment
 const supabaseUrl = process.env.VITE_SUPABASE_URL
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY
-const openaiApiKey = process.env.OPENAI_API_KEY
 
 let supabase: SupabaseClient
 
@@ -42,19 +41,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
  * @param {string} text - The text to generate an embedding for
  * @returns {Promise<{ data: number[] | null, error: Error | null }>} The embedding vector or null/error
  */
-async function generateEmbedding(text: string): Promise<{
+async function generateEmbedding(text: string, apiKeys: APIKeys): Promise<{
   data: number[] | null,
   error: Error | null
 }> {
-  if (!openaiApiKey) {
-      const errorMsg = 'Missing OpenAI API key. Please set OPENAI_API_KEY environment variable.';
-      console.error(`[Worker Embedding] ${errorMsg}`);
-      return { data: null, error: new Error(errorMsg) };
-  }
-
   try {
     console.log('[Worker Embedding] Starting OpenAI embedding generation...')
     
+    const openaiApiKey = apiKeys.openai
+    if (!openaiApiKey) {
+      const errorMsg = 'Missing OpenAI API key. Please set OPENAI_API_KEY environment variable.';
+      console.error(`[Worker Embedding] ${errorMsg}`);
+      return { data: null, error: new Error(errorMsg) };
+    }
     const input = text.replace(/\n/g, ' ') // OpenAI recommendation
     
     const response = await fetch('https://api.openai.com/v1/embeddings', {
@@ -169,7 +168,7 @@ function deduplicateDocuments(array: VectorDocument[]): VectorDocument[] {
   return deduped
 }
 
-async function execute(worker: SearchWorker) {
+async function execute(worker: SearchWorker, {apikeys}: AgentParameters) {
   console.log("Executing search worker with parameters:", worker.parameters);
 
   worker.fields.output.value = [];
@@ -201,7 +200,7 @@ async function execute(worker: SearchWorker) {
     if (collectionIds && collectionIds.length > 0) {
       console.log(`[Supabase Path] Searching ${collectionIds.length} collections:`, collectionIds);
       try {
-        const { data: queryEmbedding, error: embeddingError } = await generateEmbedding(query);
+        const { data: queryEmbedding, error: embeddingError } = await generateEmbedding(query, apikeys);
         if (embeddingError || !queryEmbedding) {
             throw embeddingError || new Error("Failed to generate query embedding.");
         }
