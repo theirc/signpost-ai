@@ -1,4 +1,3 @@
-import { app } from "@/lib/app"
 import OpenAI from "openai"
 
 declare global {
@@ -14,11 +13,10 @@ declare global {
     }
   }
   
-  async function execute(worker: STTWorker, p: AgentParameters) {
-    const ak = app.getAPIkeys()
+  async function execute(worker: STTWorker, {apikeys}: AgentParameters) {
     const audio = worker.fields.input.value as { audio: string, ext: string }
     const engine = worker.parameters.engine || "whisper-1"
-    const openai = new OpenAI({apiKey: ak.openai, dangerouslyAllowBrowser: true})
+    const openai = new OpenAI({apiKey: apikeys.openai, dangerouslyAllowBrowser: true})
   
     const binaryString = atob(audio.audio)
     const bytes = new Uint8Array(binaryString.length)

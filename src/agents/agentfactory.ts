@@ -272,9 +272,7 @@ export async function saveAgent(agent: Agent, team_id?: string) {
     agent.id = data[0].id
   }
 
-
-  console.log(workerlist)
-
+  return agent
 
 }
 
