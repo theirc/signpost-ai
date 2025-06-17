@@ -1,5 +1,38 @@
 import axios from "axios"
-import { supabase } from "../db"
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
+
+// =============================================
+// ISOMORPHIC SUPABASE/EMBEDDING FUNCTIONS
+// =============================================
+
+// Initialize Supabase client using environment variables
+// IMPORTANT: Ensure SUPABASE_URL, SUPABASE_ANON_KEY, and OPENAI_API_KEY are set in the worker's environment
+const supabaseUrl = process.env.VITE_SUPABASE_URL
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY
+
+let supabase: SupabaseClient
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('❌ Supabase URL and Anon Key must be provided via environment variables (SUPABASE_URL, SUPABASE_ANON_KEY).')
+  // Create a fake client that throws errors
+  supabase = new Proxy({} as SupabaseClient, {
+    get: (_, prop) => () => {
+      throw new Error(`Supabase client not initialized (missing env vars). Cannot call method "${String(prop)}".`)
+    }
+  })
+} else {
+  try {
+    supabase = createClient(supabaseUrl, supabaseAnonKey)
+    console.info('✅ Supabase client initialized successfully for worker.')
+  } catch (error) {
+    console.error('❌ Failed to initialize Supabase client in worker:', error)
+    supabase = new Proxy({} as SupabaseClient, {
+      get: (_, prop) => () => {
+        throw new Error(`Supabase client failed to initialize. Cannot call method "${String(prop)}".`)
+      }
+    })
+  }
+}
 
 
 /**
@@ -90,8 +123,6 @@ declare global {
       distance: NodeIO
       maxResults: NodeIO
       collections: NodeIO
-
-      condition: NodeIO
     },
     parameters: {
       engine?: "weaviate" | "exa" | "supabase"
@@ -178,7 +209,7 @@ async function execute(worker: SearchWorker, { apikeys }: AgentParameters) {
           console.log(`  - Searching collection: ${collectionId} (Limit: ${limit}, Threshold: ${similarityThreshold})`)
           try {
             const { data: supabaseMatches, error: rpcError } = await supabase.rpc('similarity_search', {
-              query_vector: queryEmbedding as any,
+              query_vector: queryEmbedding,
               target_collection_id: collectionId,
               match_threshold: similarityThreshold,
               match_count: limit
@@ -275,6 +306,7 @@ export const search: WorkerRegistryItem = {
     return agent.initializeWorker(
       {
         type: "search",
+        conditionable: true,
         parameters: {},
       },
       [
@@ -288,7 +320,6 @@ export const search: WorkerRegistryItem = {
         { type: "number", direction: "input", title: "Max Results", name: "maxResults" },
         { type: "string", direction: "input", title: "Collections", name: "collections" },
 
-        { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
       ],
       search
     )

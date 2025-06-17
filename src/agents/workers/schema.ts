@@ -8,7 +8,7 @@ declare global {
     fields: {
       input: NodeIO
       json: NodeIO
-      condition: NodeIO
+      // condition: NodeIO
     }
     parameters: {
       model?: string
@@ -25,10 +25,11 @@ function create(agent: Agent) {
       parameters: {
         model: "gpt-4o",
       },
+      conditionable: true,
     },
     [
       { type: "string", direction: "input", title: "Input", name: "input" },
-      { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
+      // { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
       { type: "json", direction: "output", title: "JSON", name: "json", system: true },
     ],
     schema

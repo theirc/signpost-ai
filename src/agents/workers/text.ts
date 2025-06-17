@@ -3,7 +3,7 @@ declare global {
   interface TextWorker extends AIWorker {
     fields: {
       output: NodeIO
-      condition: NodeIO
+      // condition: NodeIO
     },
     parameters: {
       text?: string
@@ -43,13 +43,14 @@ export const text: WorkerRegistryItem = {
     return agent.initializeWorker(
       {
         type: "text",
+        conditionable: true,
         parameters: {
           contentType: "text",
         },
       },
       [
         { type: "string", direction: "output", title: "Output", name: "output" },
-        { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
+        // { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
       ],
       text
     )

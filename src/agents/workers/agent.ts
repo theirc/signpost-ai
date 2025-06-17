@@ -51,11 +51,11 @@ export const agentWorker: WorkerRegistryItem = {
   description: "This encapsulates an agent to be executed as a worker",
   create(agent: Agent) {
     return agent.initializeWorker(
-      { type: "agentWorker" },
-      [
-        // { type: "unknown", direction: "input", title: "Input", name: "input" },
-        // { type: "unknown", direction: "output", title: "Ouput", name: "output" },
-      ],
+      {
+        type: "agentWorker",
+        conditionable: true,
+      },
+      [],
       agentWorker
     )
   },

@@ -161,7 +161,9 @@ export function createAgent(config: AgentConfig) {
     },
 
     addWorker(w: WorkerConfig): AIWorker {
-      w.id ||= `NODE_${ulid()}`
+      const nameType = w.type?.toUpperCase() || "NODE"
+
+      w.id ||= `${nameType}_${ulid()}`
       w.handles ||= {}
       const worker = buildWorker(w)
       workers[w.id] = worker

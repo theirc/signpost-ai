@@ -5,7 +5,6 @@ export interface ApiWorker extends AIWorker {
     body: NodeIO
     response: NodeIO
     error: NodeIO
-    condition: NodeIO // Ensure condition field exists if using ConditionHandler
     endpointUrlInput: NodeIO // Added new input field handle
   }
   parameters: {
@@ -25,6 +24,7 @@ function create(agent: Agent) {
   const worker = agent.initializeWorker(
     {
       type: "api",
+      conditionable: true,
       parameters: {
         // REMOVED localApiKeys: {}, 
         endpoint: '',
@@ -41,7 +41,6 @@ function create(agent: Agent) {
       { type: "string", direction: "input", title: "Body", name: "body" },
       { type: "string", direction: "output", title: "Response", name: "response" },
       { type: "string", direction: "output", title: "Error", name: "error" },
-      { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
       { type: "string", direction: "input", title: "Endpoint URL", name: "endpointUrlInput" },
     ],
     api

@@ -1,5 +1,3 @@
-import { env } from "../../env"
-
 declare global {
   type TTSEngine = "whisper"
   interface TTSWorker extends AIWorker {
@@ -11,10 +9,12 @@ declare global {
   }
 }
 
+const GOOGLE_TRANSLATE_API_KEY = import.meta.env.VITE_GOOGLE_TRANSLATE_API_KEY
+const GOOGLE_KEY = import.meta.env.VITE_GOOGLE_KEY
 
 async function detectLanguage(text: string) {
   try {
-    const url = `https://translation.googleapis.com/language/translate/v2/detect?key=${env.GOOGLE_TRANSLATE_API_KEY}`
+    const url = `https://translation.googleapis.com/language/translate/v2/detect?key=${GOOGLE_TRANSLATE_API_KEY}`
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -36,7 +36,7 @@ async function detectLanguage(text: string) {
 
 async function getAvailableVoices() {
   try {
-    const url = `https://texttospeech.googleapis.com/v1/voices?key=${env.GOOGLE_KEY}`
+    const url = `https://texttospeech.googleapis.com/v1/voices?key=${GOOGLE_KEY}`
     const response = await fetch(url, {
       method: 'GET',
     })
@@ -82,9 +82,9 @@ async function googletextToSpeech(text: string, format: string): Promise<string>
       }
     }
 
-    if (!env.GOOGLE_KEY || !text) return
+    if (!GOOGLE_KEY || !text) return
 
-    const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${env.GOOGLE_KEY}`
+    const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_KEY}`
 
     const data = {
       'input': {
@@ -130,7 +130,10 @@ export const tts: WorkerRegistryItem = {
   description: "This worker converts text to speach",
   create(agent: Agent) {
     const w = agent.initializeWorker(
-      { type: "tts" },
+      {
+        type: "tts",
+        conditionable: true,
+      },
       [
         { type: "string", direction: "input", title: "Input", name: "input" },
         { type: "audio", direction: "output", title: "Output", name: "output" },

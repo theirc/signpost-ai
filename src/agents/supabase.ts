@@ -544,6 +544,36 @@ export type Database = {
           },
         ]
       }
+      logs: {
+        Row: {
+          agent: string | null
+          created_at: string
+          handles: Json[] | null
+          id: string
+          state: Json | null
+          team_id: string | null
+          worker: string | null
+        }
+        Insert: {
+          agent?: string | null
+          created_at?: string
+          handles?: Json[] | null
+          id?: string
+          state?: Json | null
+          team_id?: string | null
+          worker?: string | null
+        }
+        Update: {
+          agent?: string | null
+          created_at?: string
+          handles?: Json[] | null
+          id?: string
+          state?: Json | null
+          team_id?: string | null
+          worker?: string | null
+        }
+        Relationships: []
+      }
       models: {
         Row: {
           created_at: string | null
