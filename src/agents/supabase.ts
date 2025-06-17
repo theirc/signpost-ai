@@ -37,6 +37,7 @@ export type Database = {
       agents: {
         Row: {
           created_at: string
+          debuguuid: string | null
           description: string | null
           edges: Json | null
           id: number
@@ -47,6 +48,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          debuguuid?: string | null
           description?: string | null
           edges?: Json | null
           id?: number
@@ -57,6 +59,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          debuguuid?: string | null
           description?: string | null
           edges?: Json | null
           id?: number
@@ -541,6 +544,36 @@ export type Database = {
           },
         ]
       }
+      logs: {
+        Row: {
+          agent: string | null
+          created_at: string
+          handles: Json[] | null
+          id: string
+          state: Json | null
+          team_id: string | null
+          worker: string | null
+        }
+        Insert: {
+          agent?: string | null
+          created_at?: string
+          handles?: Json[] | null
+          id?: string
+          state?: Json | null
+          team_id?: string | null
+          worker?: string | null
+        }
+        Update: {
+          agent?: string | null
+          created_at?: string
+          handles?: Json[] | null
+          id?: string
+          state?: Json | null
+          team_id?: string | null
+          worker?: string | null
+        }
+        Relationships: []
+      }
       models: {
         Row: {
           created_at: string | null
@@ -619,6 +652,7 @@ export type Database = {
           name: string | null
           permissions: Json[] | null
           team_id: string | null
+          teams_id: string[] | null
         }
         Insert: {
           created_at?: string
@@ -627,6 +661,7 @@ export type Database = {
           name?: string | null
           permissions?: Json[] | null
           team_id?: string | null
+          teams_id?: string[] | null
         }
         Update: {
           created_at?: string
@@ -635,6 +670,7 @@ export type Database = {
           name?: string | null
           permissions?: Json[] | null
           team_id?: string | null
+          teams_id?: string[] | null
         }
         Relationships: [
           {

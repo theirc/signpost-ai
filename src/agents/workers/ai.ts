@@ -20,7 +20,7 @@ declare global {
       documents: NodeIO
       history: NodeIO
       answer: NodeIO
-      condition: NodeIO
+      // condition: NodeIO
     }
     parameters: {
       temperature?: number
@@ -34,6 +34,7 @@ function create(agent: Agent) {
   return agent.initializeWorker(
     {
       type: "ai",
+      conditionable: true,
       parameters: {
         temperature: 0,
       }
@@ -44,7 +45,7 @@ function create(agent: Agent) {
       { type: "doc", direction: "input", title: "Documents", name: "documents" },
       { type: "chat", direction: "input", title: "History", name: "history" },
       { type: "string", direction: "output", title: "Answer", name: "answer" },
-      { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
+      // { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
     ],
     ai,
   )

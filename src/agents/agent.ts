@@ -23,6 +23,8 @@ declare global {
     agent?: Agent
     error?: string
     apikeys?: APIKeys
+    state?: any
+    logWriter?: (p: { worker: AIWorker, state: any }) => void
   }
 }
 

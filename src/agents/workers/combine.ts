@@ -16,46 +16,41 @@ declare global {
 }
 
 async function execute(worker: CombineWorker) {
+
   // Get all input fields
-  const inputFields = Object.entries(worker.fields)
-    .filter(([key, field]) => key.startsWith('input') && field.direction === 'input')
+  const inputFields = Object.entries(worker.fields).filter(([key, field]) => key.startsWith('input') && field.direction === 'input')
     // Sort by input number for consistent ordering
     .sort((a, b) => {
-      const aNum = parseInt(a[0].replace('input', '')) || 0;
-      const bNum = parseInt(b[0].replace('input', '')) || 0;
-      return aNum - bNum;
+      const aNum = parseInt(a[0].replace('input', '')) || 0
+      const bNum = parseInt(b[0].replace('input', '')) || 0
+      return aNum - bNum
     })
-    .map(([_, field]) => field);
+    .map(([_, field]) => field)
 
   if (worker.parameters.mode === "nonempty") {
     // Find the first non-empty input
     for (const input of inputFields) {
       if (Array.isArray(input.value)) {
         if (input.value.length > 0) {
-          worker.fields.output.value = input.value;
-          return;
+          worker.fields.output.value = input.value
+          return
         }
       } else if (input.value) {
-        worker.fields.output.value = input.value;
-        return;
+        worker.fields.output.value = input.value
+        return
       }
     }
-    
+
     // If all inputs are empty, use the last input (which will be empty)
-    worker.fields.output.value = inputFields[inputFields.length - 1]?.value || null;
+    worker.fields.output.value = inputFields[inputFields.length - 1]?.value || null
   }
 
   if (worker.parameters.mode === "concat") {
-    // Handle string concatenation
     if (typeof inputFields[0]?.value === "string") {
-      worker.fields.output.value = inputFields
-        .map(input => input.value || "")
-        .join("");
-    } 
-    // Handle array concatenation
+      worker.fields.output.value = inputFields.map(input => input.value || "").join("").trim()
+    }
     else if (Array.isArray(inputFields[0]?.value)) {
-      worker.fields.output.value = inputFields
-        .flatMap(input => Array.isArray(input.value) ? input.value : []);
+      worker.fields.output.value = inputFields.flatMap(input => Array.isArray(input.value) ? input.value : [])
     }
   }
 }

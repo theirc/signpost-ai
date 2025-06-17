@@ -55,6 +55,7 @@ export const translate: WorkerRegistryItem = {
     return agent.initializeWorker(
       {
         type: "translate",
+        conditionable: true,
       },
       [
         { type: "string", direction: "input", title: "Input", name: "input" },

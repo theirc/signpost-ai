@@ -9,7 +9,6 @@ declare global {
       input: NodeIO
       output: NodeIO
       prompt: NodeIO
-      condition: NodeIO
       documents: NodeIO
     },
     parameters: {
@@ -99,6 +98,7 @@ export const documentSelector: WorkerRegistryItem = {
     return agent.initializeWorker(
       {
         type: "documentSelector",
+        conditionable: true,
         parameters: {
           results: 8,
         },
@@ -108,7 +108,6 @@ export const documentSelector: WorkerRegistryItem = {
         { type: "doc", direction: "output", title: "Output", name: "output" },
         { type: "string", direction: "input", title: "Input", name: "input" },
         { type: "string", direction: "input", title: "Prompt", name: "prompt" },
-        { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
       ],
       documentSelector
     )

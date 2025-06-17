@@ -1,5 +1,6 @@
 import { createJsonTranslator, createLanguageModel } from "typechat"
-import { createTypeScriptJsonValidator } from "typechat/ts"
+import { createZodJsonValidator } from "typechat/zod"
+import { z } from "zod"
 
 
 declare global {
@@ -7,7 +8,7 @@ declare global {
     fields: {
       input: NodeIO
       json: NodeIO
-      condition: NodeIO
+      // condition: NodeIO
     }
     parameters: {
       model?: string
@@ -24,10 +25,11 @@ function create(agent: Agent) {
       parameters: {
         model: "gpt-4o",
       },
+      conditionable: true,
     },
     [
       { type: "string", direction: "input", title: "Input", name: "input" },
-      { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
+      // { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
       { type: "json", direction: "output", title: "JSON", name: "json", system: true },
     ],
     schema
@@ -42,56 +44,43 @@ async function execute(worker: SchemaWorker, p: AgentParameters) {
 
   if (!input) return
 
-  let schema = `
-  
-  export interface Schema {
-  
-  `
+  const schemaFields: Record<string, z.ZodTypeAny> = {}
 
   for (let s of handlers) {
-    let type = ""
+    let fieldSchema: z.ZodTypeAny
+
     if (s.type == "boolean") {
-      type = "boolean"
+      fieldSchema = z.boolean()
     } else if (s.type == "number") {
-      type = "number"
+      fieldSchema = z.number()
     } else if (s.type == "string") {
-      type = "string"
+      fieldSchema = z.string()
     } else if (s.type == "string[]") {
-      type = "string[]"
+      fieldSchema = z.array(z.string())
     } else if (s.type == "number[]") {
-      type = "number[]"
-    } else if (s.type == "enum") {
-      type = `${s.enum ? s.enum?.map((e) => `"${e}"`).join(" | ") : "string[]"}`
+      fieldSchema = z.array(z.number())
+    } else if (s.type == "enum" && s.enum && s.enum.length > 0) {
+      fieldSchema = z.enum(s.enum as [string, ...string[]])
     } else {
-      type = "any"
+      fieldSchema = z.any()
     }
 
-    schema += `
-
-    /*
-    ${s.prompt}
-    */
-    ${s.name}?: ${type}
-
-    `
-
+    schemaFields[s.name] = fieldSchema.optional().describe(s.prompt || "")
   }
 
-  schema += `
-  
-  }
-  `
-
+  const schema = z.object(schemaFields)
   const OPENAI_MODEL = worker.parameters.model || "gpt-4o"
-  console.log("OPENAI_MODEL", OPENAI_MODEL)
-
   const schemaModel = createLanguageModel({
     OPENAI_MODEL,
     OPENAI_API_KEY: p.apikeys.openai,
   })
 
-  const validator = createTypeScriptJsonValidator<any>(schema, "Schema")
-  const translator = createJsonTranslator<any>(schemaModel, validator)
+  const dataExtractionSchema = {
+    Response: schema
+  }
+
+  const validator = createZodJsonValidator(dataExtractionSchema, "Response")
+  const translator = createJsonTranslator<z.infer<typeof schema>>(schemaModel, validator)
   const routeresponse = await translator.translate(input)
 
   const jsonout = {}
@@ -111,7 +100,6 @@ async function execute(worker: SchemaWorker, p: AgentParameters) {
   worker.fields.json.value = jsonout
 
 
-
 }
 
 
@@ -124,4 +112,3 @@ export const schema: WorkerRegistryItem = {
   create,
   get registry() { return schema },
 }
-
