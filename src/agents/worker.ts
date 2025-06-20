@@ -14,12 +14,8 @@ export const inputOutputTypes = {
   chat: "Chat",
   json: "JSON",
   audio: "Audio",
-  // image: "Image",
-  // video: "Video",
-  // execute: "Execute",
+  handoff: "Handoff",
 }
-
-
 
 interface WorkerCondition {
   operator?: WorkerOperators
@@ -61,8 +57,11 @@ declare global {
     parameters?: object
     x?: number
     y?: number
+    width?: number
+    height?: number
     condition?: WorkerCondition
     conditionable?: boolean
+    state?: any
   }
 }
 
@@ -108,6 +107,7 @@ export function buildWorker(w: WorkerConfig) {
     },
 
     parameters: w.parameters as any || {},
+    state: {},
     values: {},
     fields,
 
@@ -115,6 +115,12 @@ export function buildWorker(w: WorkerConfig) {
       worker.error = null
       if (worker.executed) return
       worker.executed = true
+
+      if (!p.state.workers) {
+        p.state.workers = {}
+      }
+      
+      worker.state = p.state.workers[worker.id] || {}
 
       await worker.getValues(p)
 
@@ -163,6 +169,8 @@ export function buildWorker(w: WorkerConfig) {
         throw error
       }
 
+      p.state.workers[worker.id] = worker.state || {}
+
       p.agent.update()
       worker.updateWorker()
       p.agent.currentWorker = null
@@ -210,45 +218,6 @@ export function buildWorker(w: WorkerConfig) {
         if (operator === "between") return value >= conditionValue1 && value <= conditionValue2
       }
     },
-
-    // evaluateCondition(condValue: any): boolean {
-    //   let { operator, value, value2 } = worker.condition
-
-    //   if (operator === "equals") return condValue == value
-    //   if (operator === "notEquals") return condValue != value
-
-    //   // String operators
-    //   if (typeof condValue === "string" && typeof value === "string") {
-    //     if (!value) value = ""
-    //     if (typeof value !== "string") value = String(value)
-    //     if (operator === "contains") return condValue.includes(value)
-    //     if (operator === "notContains") return !condValue.includes(value)
-    //     if (operator === "isEmpty") return !!value
-    //     if (operator === "isNotEmpty") return !value
-    //   }
-
-    //   // Number operators
-    //   if (typeof condValue === "number" && typeof value === "number") {
-    //     if (operator === "gt") {
-    //       return condValue > value
-    //     }
-    //     if (operator === "lt") {
-    //       return condValue < value
-    //     }
-    //     if (operator === "gte") {
-    //       return condValue >= value
-    //     }
-    //     if (operator === "lte") {
-    //       return condValue <= value
-    //     }
-    //     if (operator === "between" && typeof value2 === "number") {
-    //       return condValue >= value && condValue <= value2
-    //     }
-    //   }
-
-    //   // Boolean fallback (for backward compatibility)
-    //   return (!!value) === (!!condValue)
-    // },
 
     async getValues(p: AgentParameters) {
       const connw = worker.getConnectedWokers(p)
@@ -323,6 +292,31 @@ export function buildWorker(w: WorkerConfig) {
             target,
           })
 
+        }
+      }
+      return connwh
+    },
+
+    getConnectedWokersToHandle(h: NodeIO, p: AgentParameters) {
+      const { agent, agent: { workers } } = p
+
+      const connwh: AIWorker[] = []
+      if (!h) return connwh
+
+      const addedWorkers: { [index: string]: AIWorker } = {}
+
+      for (const e of Object.values(agent.edges)) {
+        if (e.targetHandle === h.id) {
+          const cw = workers[e.source]
+          if (!cw || addedWorkers[cw.id]) continue
+          addedWorkers[cw.id] = cw
+          connwh.push(cw)
+        }
+        if (e.sourceHandle === h.id) {
+          const cw = workers[e.target]
+          if (!cw || addedWorkers[cw.id]) continue
+          addedWorkers[cw.id] = cw
+          connwh.push(cw)
         }
       }
       return connwh

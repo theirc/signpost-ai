@@ -56,7 +56,7 @@ ${question}
 `
   const schemaModel = createLanguageModel({
     OPENAI_MODEL: "gpt-4o",
-    OPENAI_API_KEY: p.apikeys.openai,
+    OPENAI_API_KEY: p.apiKeys.openai,
   })
 
   const documentsResponse = z.object({
