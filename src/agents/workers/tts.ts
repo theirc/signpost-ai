@@ -9,12 +9,9 @@ declare global {
   }
 }
 
-const GOOGLE_TRANSLATE_API_KEY = import.meta.env.VITE_GOOGLE_TRANSLATE_API_KEY
-const GOOGLE_KEY = import.meta.env.VITE_GOOGLE_KEY
-
-async function detectLanguage(text: string) {
+async function detectLanguage(text: string, googleTranslateApiKey: string) {
   try {
-    const url = `https://translation.googleapis.com/language/translate/v2/detect?key=${GOOGLE_TRANSLATE_API_KEY}`
+    const url = `https://translation.googleapis.com/language/translate/v2/detect?key=${googleTranslateApiKey}`
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -34,9 +31,9 @@ async function detectLanguage(text: string) {
   }
 }
 
-async function getAvailableVoices() {
+async function getAvailableVoices(googleApiKey: string) {
   try {
-    const url = `https://texttospeech.googleapis.com/v1/voices?key=${GOOGLE_KEY}`
+    const url = `https://texttospeech.googleapis.com/v1/voices?key=${googleApiKey}`
     const response = await fetch(url, {
       method: 'GET',
     })
@@ -60,10 +57,10 @@ async function findBestVoiceForLanguage(languageCode: string, voices: any[]): Pr
   return 'en-US'
 }
 
-async function googletextToSpeech(text: string, format: string): Promise<string> {
+async function googletextToSpeech(text: string, format: string, apikeys: APIKeys): Promise<string> {
   try {
-    const language = await detectLanguage(text)
-    const voices = await getAvailableVoices()
+    const language = await detectLanguage(text, apikeys?.googleTranslate || "")
+    const voices = await getAvailableVoices(apikeys?.google || "")
     const bestVoice = findBestVoiceForLanguage(language, voices)
 
     let voiceName = null
@@ -82,9 +79,9 @@ async function googletextToSpeech(text: string, format: string): Promise<string>
       }
     }
 
-    if (!GOOGLE_KEY || !text) return
+    if (!apikeys.google || !text) return
 
-    const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_KEY}`
+    const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apikeys.google}`
 
     const data = {
       'input': {
@@ -112,11 +109,11 @@ async function googletextToSpeech(text: string, format: string): Promise<string>
 
 }
 
-async function execute(worker: TTSWorker, p: AgentParameters) {
+async function execute(worker: TTSWorker, { apiKeys }: AgentParameters) {
 
   const text = worker.fields.input.value
 
-  const textToSpeech = await googletextToSpeech(text, "MP3")
+  const textToSpeech = await googletextToSpeech(text, "MP3", apiKeys)
 
   worker.fields.output.value = { audio: textToSpeech, ext: "mp3" }
 }
