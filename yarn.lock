@@ -60,7 +60,7 @@
     nanoid "^3.3.8"
     secure-json-parse "^2.7.0"
 
-"@ai-sdk/provider@1.1.3":
+"@ai-sdk/provider@1.1.3", "@ai-sdk/provider@^1.1.3":
   version "1.1.3"
   resolved "https://registry.yarnpkg.com/@ai-sdk/provider/-/provider-1.1.3.tgz#ebdda8077b8d2b3f290dcba32c45ad19b2704681"
   integrity sha512-qZMxYJ0qqX/RfnuIaab+zp8UAeJn/ygXXAffR5I4N0n1IrvA6qBsjc8hXLmBiMV2zoXlifkacF7sEFnYnjBcqg==
@@ -270,7 +270,7 @@
     zod "^3.23.8"
     zod-to-json-schema "^3.24.1"
 
-"@openai/agents-core@0.0.9":
+"@openai/agents-core@0.0.9", "@openai/agents-core@^0.0.9":
   version "0.0.9"
   resolved "https://registry.yarnpkg.com/@openai/agents-core/-/agents-core-0.0.9.tgz#fb0e1875e498daaa47ad8547fdd20be55dc85bab"
   integrity sha512-n7vftCMIBNNbhHSs6SAr0mU99YDD8CH2wRoGZ016nqgl1X9SZsfdQyZvpMMypWrGQ+bqke+jUtXCVnOhKXISFQ==
@@ -280,6 +280,16 @@
     openai "^5.0.1"
   optionalDependencies:
     "@modelcontextprotocol/sdk" "^1.12.0"
+
+"@openai/agents-extensions@^0.0.9":
+  version "0.0.9"
+  resolved "https://registry.yarnpkg.com/@openai/agents-extensions/-/agents-extensions-0.0.9.tgz#a1a59fc6a97cd33f87b53bfe06c456a4f8069b8a"
+  integrity sha512-r8gSAd9gZOSlY/c79dWToi5e1BnBrCCIY/gZ+j84rWl+hRumhjzMQcXenzbw6y3ng45UkmIubIUK3VBO2SSIPQ==
+  dependencies:
+    "@ai-sdk/provider" "^1.1.3"
+    "@openai/zod" "npm:zod@^3.25.40"
+    "@types/ws" "^8.18.1"
+    debug "^4.4.0"
 
 "@openai/agents-openai@0.0.9":
   version "0.0.9"
