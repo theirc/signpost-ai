@@ -135,7 +135,7 @@ function deduplicateDocuments(array: VectorDocument[]): VectorDocument[] {
   return deduped
 }
 
-async function execute(worker: SearchWorker, { apikeys }: AgentParameters) {
+async function execute(worker: SearchWorker, { apiKeys }: AgentParameters) {
   console.log("Executing search worker with parameters:", worker.parameters)
 
   worker.fields.output.value = []
@@ -167,7 +167,7 @@ async function execute(worker: SearchWorker, { apikeys }: AgentParameters) {
     if (collectionIds && collectionIds.length > 0) {
       console.log(`[Supabase Path] Searching ${collectionIds.length} collections:`, collectionIds)
       try {
-        const { data: queryEmbedding, error: embeddingError } = await generateEmbedding(query, apikeys)
+        const { data: queryEmbedding, error: embeddingError } = await generateEmbedding(query, apiKeys)
         if (embeddingError || !queryEmbedding) {
           throw embeddingError || new Error("Failed to generate query embedding.")
         }

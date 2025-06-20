@@ -5,7 +5,7 @@ import morgan from 'morgan'
 import { agents } from './agents'
 import { supabase } from './agents/db'
 
-const version = '1.0606.1457'
+const version = '1.0620.1754'
 
 const app = express()
 app.use(cors())
@@ -22,7 +22,7 @@ app.post('/agent', async (req: Request<any, any, AgentParameters & { id: number,
   try {
     const a = await agents.loadAgent(input.id)
     
-    let apikeys = {}
+    let apiKeys = {}
     if (input.team_id) {
       const { data, error } = await supabase
         .from("api_keys")
@@ -32,7 +32,7 @@ app.post('/agent', async (req: Request<any, any, AgentParameters & { id: number,
       if (error) {
         console.error('Error fetching api keys:', error)
       } else {
-        apikeys = data?.reduce<Record<string, string>>((acc, key) => {
+        apiKeys = data?.reduce<Record<string, string>>((acc, key) => {
           if (key.type && key.key) {
             acc[key.type] = key.key
           }
@@ -43,7 +43,7 @@ app.post('/agent', async (req: Request<any, any, AgentParameters & { id: number,
 
     const p: AgentParameters = {
       input,
-      apikeys,
+      apiKeys,
     }
 
     await a.execute(p)

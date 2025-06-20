@@ -45,17 +45,13 @@ function create(agent: Agent) {
       { type: "doc", direction: "input", title: "Documents", name: "documents" },
       { type: "chat", direction: "input", title: "History", name: "history" },
       { type: "string", direction: "output", title: "Answer", name: "answer" },
-      // { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
     ],
     ai,
   )
-
 }
 
 
-
-
-async function execute(worker: BotWorker, { apikeys }: AgentParameters) {
+async function execute(worker: BotWorker, { apiKeys }: AgentParameters) {
 
   let model: any = null
   const paramModel = worker.parameters.model || ""
@@ -69,7 +65,7 @@ async function execute(worker: BotWorker, { apikeys }: AgentParameters) {
     return
   }
 
-  const apiKey = apikeys[provider]
+  const apiKey = apiKeys[provider]
 
   if (!apiKey) {
     worker.error = `No ${provider} API key found`
