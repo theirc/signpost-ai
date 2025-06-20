@@ -13,10 +13,10 @@ declare global {
 }
 
 
-async function execute(worker: TranslateWorker, { apiKeys }: AgentParameters) {
+async function execute(worker: TranslateWorker, { apikeys }: AgentParameters) {
 
-  const apiKey = apiKeys["googleTranslateApiKey"]
-  const project = apiKeys["googleTranslateProjectId"]
+  const apiKey = apikeys["googleTranslateApiKey"]
+  const project = apikeys["googleTranslateProjectId"]
   const targetLanguageCode = worker.fields.language.value || ""
   const content = worker.fields.input.value || ""
 

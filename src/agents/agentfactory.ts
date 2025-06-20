@@ -33,22 +33,6 @@ export function createAgent(config: AgentConfig) {
     set id(v: number) { config.id = v },
     get title() { return config.title },
     set title(v: string) { config.title = v },
-
-    get isConversational() {
-      const input = agent.getInputWorker()
-      const response = agent.getResponseWorker()
-      if (input && response) {
-
-        const hasMessageHandles = Object.values(input.handles).some((h) => h.direction === "output" && h.type === "string" && h.name === "message")
-        // const hasChatHandles = Object.values(input.handles).some((h) => h.direction === "output" && h.type === "chat" && h.name === "history")
-        const hasResponseHandles = Object.values(response.handles).some((h) => h.direction === "input" && h.type === "string" && h.name === "response")
-
-        return hasMessageHandles && hasResponseHandles
-      }
-      return false
-    },
-
-
     edges,
     workers,
     displayData: false,
@@ -56,6 +40,7 @@ export function createAgent(config: AgentConfig) {
     type: "data" as AgentTypes,
     debuguuid: config.debuguuid || "",
     description: "",
+
 
     currentWorker: null as AIWorker,
     update() {
@@ -113,6 +98,7 @@ export function createAgent(config: AgentConfig) {
         w.error = null
         for (const key in w.handles) {
           const h = w.handles[key]
+          // if (h.persistent) continue
           h.value = h.default || undefined
         }
       }
@@ -124,11 +110,8 @@ export function createAgent(config: AgentConfig) {
       p.output ||= {}
       p.input ||= {}
       p.output ||= {}
-      p.apiKeys ||= {}
-      p.state ||= {
-        agent: {},
-        workers: {}
-      }
+      p.apikeys ||= {}
+      p.state ||= {}
       p.logWriter ||= () => { }
       p.agent = agent
 
@@ -140,12 +123,7 @@ export function createAgent(config: AgentConfig) {
 
       if (hasUid) {
         const dbState = await supabase.from("states").select("*").eq("id", p.uid).single()
-        if (dbState.data) {
-          p.state = dbState.data.state as any
-          p.state ||= { agent: {}, workers: {} }
-          p.state.agent ||= {}
-          p.state.workers ||= {}
-        }
+        if (dbState.data) p.state = dbState.data.state || {}
       }
 
       console.log(`Executing agent '${agent.title}'`)
@@ -211,7 +189,7 @@ export function configureAgent(data: AgentConfig) {
   for (const w of workers) {
     const { handles, ...rest } = w
 
-    // console.log("Loading worker: ", w.type)
+    console.log("Loading worker: ", w.type)
 
     const factory = (workerRegistry[w.type] as WorkerRegistryItem)
     if (!factory) continue
@@ -274,11 +252,6 @@ export async function saveAgent(agent: Agent, team_id?: string) {
       parameters: w.parameters || {},
       condition: w.condition || {}
     }
-    if (w.width && w.height) {
-      wc.width = w.width
-      wc.height = w.height
-    }
-
     for (const key in w.handles) {
       const h = w.handles[key]
       delete h.value
@@ -306,7 +279,7 @@ export async function saveAgent(agent: Agent, team_id?: string) {
 }
 
 export async function loadAgent(id: number): Promise<Agent> {
-  // console.log("Loading agent: ", id)
+  console.log("Loading agent: ", id)
   const { data } = await supabase.from("agents").select("*").eq("id", id).single()
   const agent = configureAgent(data as any)
 

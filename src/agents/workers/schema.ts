@@ -2,15 +2,18 @@ import { createJsonTranslator, createLanguageModel } from "typechat"
 import { createZodJsonValidator } from "typechat/zod"
 import { z } from "zod"
 
+
 declare global {
   interface SchemaWorker extends AIWorker {
     fields: {
       input: NodeIO
       json: NodeIO
+      // condition: NodeIO
     }
     parameters: {
       model?: string
     }
+
   }
 }
 
@@ -26,6 +29,7 @@ function create(agent: Agent) {
     },
     [
       { type: "string", direction: "input", title: "Input", name: "input" },
+      // { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
       { type: "json", direction: "output", title: "JSON", name: "json", system: true },
     ],
     schema
@@ -68,7 +72,7 @@ async function execute(worker: SchemaWorker, p: AgentParameters) {
   const OPENAI_MODEL = worker.parameters.model || "gpt-4o"
   const schemaModel = createLanguageModel({
     OPENAI_MODEL,
-    OPENAI_API_KEY: p.apiKeys.openai,
+    OPENAI_API_KEY: p.apikeys.openai,
   })
 
   const dataExtractionSchema = {
@@ -94,6 +98,7 @@ async function execute(worker: SchemaWorker, p: AgentParameters) {
   }
 
   worker.fields.json.value = jsonout
+
 
 }
 
