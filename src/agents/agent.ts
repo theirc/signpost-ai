@@ -1,7 +1,6 @@
 import { createAgent, configureAgent, loadAgent, saveAgent } from "./agentfactory"
 
 declare global {
-
   type LiteralUnion<KnownValues extends string> = (string & {}) | KnownValues
   type Agent = ReturnType<typeof createAgent>
   type EdgeConnections = { [index: string]: { source: string, target: string, sourceHandle: string, targetHandle: string } }
@@ -14,7 +13,6 @@ declare global {
     groq?: string
     xai?: string
     zendesk?: string
-    googleTranslate?: string
   }
 
   interface AgentParameters {
@@ -24,12 +22,8 @@ declare global {
     output?: any
     agent?: Agent
     error?: string
-    apiKeys?: APIKeys
-    // state?: any
-    state?: {
-      agent: {}
-      workers: { [key: string]: any }
-    }
+    apikeys?: APIKeys
+    state?: any
     logWriter?: (p: { worker: AIWorker, state: any }) => void
   }
 }

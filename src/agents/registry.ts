@@ -14,8 +14,6 @@ import { state } from "./workers/state"
 import { stt } from "./workers/stt"
 import { tts } from "./workers/tts"
 import { translate } from "./workers/translate"
-import { promptAgent } from "./workers/promptAgent"
-import { handoffAgent } from "./workers/handoffAgent"
 
 
 type WorkerCategories = "io" | "generator" | "debug" | "tool"
@@ -58,7 +56,5 @@ export const workerRegistry = {
   stt,
   tts,
   translate,
-  promptAgent,
-  handoffAgent,
 
 } satisfies { [index: string]: WorkerRegistryItem }

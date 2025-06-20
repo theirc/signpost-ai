@@ -52,7 +52,7 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
   const logPrefix = `[API Worker (${worker.id})]`
   console.log(`${logPrefix} - Executing with parameters:`, worker.parameters)
   console.log(`${logPrefix} - Input body value:`, worker.fields.body.value)
-  console.log(`${logPrefix} - Provided AgentParameters.apikeys:`, p.apiKeys ? Object.keys(p.apiKeys) : 'None')
+  console.log(`${logPrefix} - Provided AgentParameters.apikeys:`, p.apikeys ? Object.keys(p.apikeys) : 'None')
 
   try {
     // --- Common Setup --- 
@@ -118,7 +118,7 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
       } else {
         console.log(`${logPrefix} - Key '${selectedKeyName}' not found or empty in environment variables. Checking AgentParameters...`)
         // 2. If not in env, check AgentParameters.apikeys
-        const paramKeyValue = p.apiKeys?.[selectedKeyName]
+        const paramKeyValue = p.apikeys?.[selectedKeyName]
         if (paramKeyValue !== undefined) {
           actualValue = paramKeyValue
           // DO NOT log the actual key value here for security

@@ -13,10 +13,10 @@ declare global {
   }
 }
 
-async function execute(worker: STTWorker, { apiKeys }: AgentParameters) {
+async function execute(worker: STTWorker, { apikeys }: AgentParameters) {
   const audio = worker.fields.input.value as { audio: string, ext: string }
   const engine = worker.parameters.engine || "whisper-1"
-  const openai = new OpenAI({ apiKey: apiKeys.openai, dangerouslyAllowBrowser: true })
+  const openai = new OpenAI({ apiKey: apikeys.openai, dangerouslyAllowBrowser: true })
 
   const binaryString = atob(audio.audio)
   const bytes = new Uint8Array(binaryString.length)
