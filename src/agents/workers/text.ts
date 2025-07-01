@@ -7,7 +7,7 @@ declare global {
     },
     parameters: {
       text?: string
-      contentType?: "text" | "number" | "audio" | "image" | "file"
+      contentType?: "text" | "number" | "audio" | "image" | "file" | "Timestamp"
       contentUri?: string
       numberValue?: number
     }
@@ -25,6 +25,9 @@ async function execute(worker: TextWorker) {
     case "image":
     case "file":
       worker.fields.output.value = contentUri || ""
+      break
+    case "Timestamp":
+      worker.fields.output.value = new Date()
       break
     case "text":
     default:
@@ -57,4 +60,3 @@ export const text: WorkerRegistryItem = {
   },
   get registry() { return text },
 }
-

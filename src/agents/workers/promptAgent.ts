@@ -1,5 +1,4 @@
-import { AgentInputItem, Agent as OpenAIAgent, run, tool, user } from '@openai/agents'
-import { promptWithHandoffInstructions } from '@openai/agents-core/extensions'
+import { AgentInputItem, FunctionTool, Agent as OpenAIAgent, run, tool, user } from '@openai/agents'
 import { aisdk } from '@openai/agents-extensions'
 import { z } from 'zod'
 import { createModel } from '../utils'
@@ -18,7 +17,10 @@ declare global {
       output: NodeIO
       instructions: NodeIO
       handoff?: NodeIO
+      tool?: NodeIO
     }
+    // getTools?(worker: PromptAgentWorker, p: AgentParameters): FunctionTool[]
+
   }
 }
 
@@ -57,7 +59,7 @@ async function contextExtractor(instructions: string, context: any, model: any, 
     parameters,
     async execute(ctx) {
       if (ctx) context = ctx
-      console.log("🔨 context_change_tool", ctx)
+      // console.log("🔨 context_change_tool", ctx)
       return ``
     },
   })
@@ -83,6 +85,24 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
   worker.state.context ||= {}
   worker.state.history ||= []
 
+  const handoffAgents = worker.getConnectedWokersToHandle(worker.fields.handoff, p).filter((w) => w.config.type === "handoffAgent") as any as HandoffAgentWorker[]
+
+  for (const handoffAgent of handoffAgents) {
+    if (!handoffAgent.parameters.model) {
+      worker.error = `Model not set for Handoff Agent`
+      return
+    }
+    if (!handoffAgent.parameters.handoffDescription) {
+      worker.error = `Handoff Agent without handoff description found`
+      return
+    }
+  }
+
+
+
+
+
+
   const { history } = worker.state
   const baseModel = createModel(p.apiKeys, worker.parameters.model ||= "openai/gpt-4.1")
 
@@ -101,40 +121,42 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
   worker.state.context = (await contextExtractor(instructions, worker.state.context, model, userHandlers, history)) || {}
   for (const key in worker.state.context) {
     const field = userHandlers.find((h) => h.name === key)
-    if (field) field.value = worker.state.context[key]
+    if (field && worker.state.context[key] != null) field.value = worker.state.context[key]
   }
 
-  const handoffAgents = worker.getConnectedWokersToHandle(worker.fields.handoff, p).filter((w) => w.config.type === "handoffAgent") as any as HandoffAgentWorker[]
   const handoffs = []
-
-
   for (const handoffAgent of handoffAgents) {
-    if (!handoffAgent.parameters.handoffDescription || !handoffAgent.parameters.model) continue
-    const oldc = p.agent.currentWorker
-    await worker.execute(p)
-    p.agent.currentWorker = oldc
-    if (!handoffAgent.fields.instructions) continue
-
-    console.log(`Creating handoff agent: ${handoffAgent.parameters.handoffDescription} with instructions ${handoffAgent.fields.instructions.value}`)
-
-    const baseModel = createModel(p.apiKeys, worker.parameters.model ||= "openai/gpt-4.1")
-    const model = aisdk(baseModel)
-    const hoa = new OpenAIAgent({
-      name: 'Handoff Agent',
-      model,
-      handoffDescription: handoffAgent.parameters.handoffDescription,
-      instructions: promptWithHandoffInstructions(handoffAgent.fields.instructions.value),
-    })
-    handoffs.push(hoa)
+    const handoff = await handoffAgent.getHandoffAgent(handoffAgent, p)
+    handoffs.push(handoff)
   }
+  const agentTools = worker.getTools(worker, p)
+  const tools: FunctionTool[] = agentTools.map(t => {
+    return tool({
+      description: t.description,
+      parameters: t.parameters,
+      execute: t.execute,
+    })
+  })
 
-
+  // console.log("Prompt Agent Tools:", agentTools)
 
   const agent = new OpenAIAgent({
     name: 'Agent',
     model,
     instructions,
     handoffs,
+    tools,
+  })
+
+
+  agent.on("agent_handoff", (ctx, agent) => {
+    console.log(`👉 LLM Agent handoff to Agent with description '${agent.handoffDescription}'`)
+  })
+  agent.on("agent_tool_start", (ctx, b) => {
+    console.log(`🔨 LLM Agent Tool '${b.name}' Start`, b, ctx)
+  })
+  agent.on("agent_tool_end", (ctx, b) => {
+    console.log(`🔨 LLM Agent Tool '${b.name}' End`, b, ctx)
   })
 
 
@@ -169,6 +191,7 @@ export const promptAgent: WorkerRegistryItem = {
         { type: "string", direction: "output", title: "Output", name: "output" },
         { type: "string", direction: "input", title: "Instructions", name: "instructions" },
         { type: "handoff", direction: "output", title: "Handoffs", name: "handoff" },
+        { type: "tool", direction: "output", title: "Tool", name: "tool" },
       ],
       promptAgent
     )

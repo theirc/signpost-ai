@@ -1,5 +1,6 @@
 import { ulid } from "ulid"
 import { loadAgent } from "./agentfactory"
+import { ZodObject } from "zod"
 
 export const inputOutputTypes = {
   string: "Text",
@@ -15,6 +16,8 @@ export const inputOutputTypes = {
   json: "JSON",
   audio: "Audio",
   handoff: "Handoff",
+  date: "Date",
+  tool: "Tool",
 }
 
 interface WorkerCondition {
@@ -23,9 +26,10 @@ interface WorkerCondition {
   value2?: any // For "between" operator
 }
 
+
 declare global {
 
-  type AIWorker = ReturnType<typeof buildWorker>
+  type AIWorker = ReturnType<typeof buildWorker> & { agent?: Agent }
 
   type WorkerHandles = { [index: string]: NodeIO }
   type IOTypes = keyof typeof inputOutputTypes
@@ -63,6 +67,13 @@ declare global {
     conditionable?: boolean
     state?: any
   }
+
+  interface ToolConfig {
+    description?: string
+    parameters?: ZodObject<any>
+    execute?(args: any, ctx?: any): Promise<string>
+  }
+
 }
 
 
@@ -77,6 +88,7 @@ export function buildWorker(w: WorkerConfig) {
     registry: null as WorkerRegistryItem,
     executed: false,
     error: null as string,
+
     get conditionable() {
       return w.conditionable
     },
@@ -112,14 +124,13 @@ export function buildWorker(w: WorkerConfig) {
     fields,
 
     async execute(p: AgentParameters) {
-      worker.error = null
+
       if (worker.executed) return
       worker.executed = true
+      worker.error = null
+      const prevWorker = p.agent.currentWorker
 
-      if (!p.state.workers) {
-        p.state.workers = {}
-      }
-      
+      if (!p.state.workers) p.state.workers = {}
       worker.state = p.state.workers[worker.id] || {}
 
       await worker.getValues(p)
@@ -137,18 +148,17 @@ export function buildWorker(w: WorkerConfig) {
         let someConditionsMet = false
 
         for (const cond of conditions) {
-          console.log(`Worker '${w.type}' condition:`, cond)
+          // console.log(`Worker '${w.type}' condition:`, cond)
           const conditionMet = worker.evaluateCondition(cond)
           if (conditionMet) {
             someConditionsMet = true
             break
           }
-          // allConditionsMet = allConditionsMet && conditionMet
         }
         if (!someConditionsMet) {
-          console.log(`Worker '${w.type}' - Conditions not met`)
+          // console.log(`Worker '${w.type}' - Conditions not met`)
           worker.updateWorker()
-          p.agent.currentWorker = null
+          p.agent.currentWorker = prevWorker
           p.agent.update()
           return
         }
@@ -173,10 +183,32 @@ export function buildWorker(w: WorkerConfig) {
 
       p.agent.update()
       worker.updateWorker()
-      p.agent.currentWorker = null
+      p.agent.currentWorker = prevWorker
       p.agent.update()
 
     },
+
+    getTool(w: any, p: AgentParameters): ToolConfig {
+      return null
+    },
+    getTools(w: any, p: AgentParameters): ToolConfig[] {
+
+      const connected = worker.getConnectedWokersToHandle(worker.fields.tool, p)
+      const tools: ToolConfig[] = []
+
+      for (const c of connected) {
+        const { description, parameters, execute } = c.getTool(c, p)
+        if (!description) throw new Error(`Worker does not have a Tool Description parameter set. Please set it to describe the tool's purpose.`)
+        tools.push({
+          description,
+          parameters,
+          execute,
+        })
+      }
+
+      return tools
+    },
+
 
     evaluateCondition(handle: NodeIO): boolean {
       let { value, conditionValue1, conditionValue2, operator, type } = handle

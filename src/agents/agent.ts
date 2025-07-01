@@ -25,7 +25,6 @@ declare global {
     agent?: Agent
     error?: string
     apiKeys?: APIKeys
-    // state?: any
     state?: {
       agent: {}
       workers: { [key: string]: any }

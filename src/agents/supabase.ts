@@ -428,6 +428,36 @@ export type Database = {
           },
         ]
       }
+      chat_history: {
+        Row: {
+          agent_id: string | null
+          content: string | null
+          created_at: string
+          id: string
+          role: string | null
+          team_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          role?: string | null
+          team_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          role?: string | null
+          team_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       collection_sources: {
         Row: {
           collection_id: string
@@ -548,6 +578,7 @@ export type Database = {
         Row: {
           agent: string | null
           created_at: string
+          execution: string | null
           handles: Json[] | null
           id: string
           state: Json | null
@@ -557,6 +588,7 @@ export type Database = {
         Insert: {
           agent?: string | null
           created_at?: string
+          execution?: string | null
           handles?: Json[] | null
           id?: string
           state?: Json | null
@@ -566,6 +598,7 @@ export type Database = {
         Update: {
           agent?: string | null
           created_at?: string
+          execution?: string | null
           handles?: Json[] | null
           id?: string
           state?: Json | null

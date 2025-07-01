@@ -1,5 +1,7 @@
 import axios from "axios"
 import { supabase } from "../db"
+import { z } from "zod"
+import { convertDocumentsToMarkdown } from "../utils"
 
 
 /**
@@ -85,6 +87,8 @@ declare global {
       output: NodeIO
       references: NodeIO
 
+      tool: NodeIO
+
       engine: NodeIO
       domain: NodeIO
       distance: NodeIO
@@ -99,6 +103,7 @@ declare global {
       domain?: string[]
       distance?: number
       collections?: string[]
+      toolDescription?: string
     }
   }
 
@@ -265,6 +270,29 @@ async function execute(worker: SearchWorker, { apiKeys }: AgentParameters) {
 }
 
 
+function getTool(w: SearchWorker, p: AgentParameters): ToolConfig {
+
+  const tool: ToolConfig = {
+    description: w.parameters?.toolDescription,
+    parameters: z.object({
+      query: z.string().describe("The search query to execute."),
+    }),
+
+    async execute({ query }) {
+      console.log(`🔎  Executing search Tool with query: ${query}`)
+      w.fields.input.value = query
+      await w.execute(p)
+      const results = w.fields.output.value as VectorDocument[] || []
+      return convertDocumentsToMarkdown(results)
+    },
+  }
+
+  return tool
+}
+
+
+
+
 export const search: WorkerRegistryItem = {
   title: "Search",
   execute,
@@ -272,15 +300,19 @@ export const search: WorkerRegistryItem = {
   type: "search",
   description: "This worker allows you to search for information in the knowledge base",
   create(agent: Agent) {
-    return agent.initializeWorker(
+    const w = agent.initializeWorker(
       {
         type: "search",
-        parameters: {},
+        parameters: {
+          toolDescription: "Search tool",
+        },
       },
       [
         { type: "string", direction: "input", title: "Input", name: "input" },
         { type: "doc", direction: "output", title: "Documents", name: "output" },
         { type: "references", direction: "output", title: "References", name: "references" },
+
+        { type: "tool", direction: "input", title: "Tool", name: "tool" },
 
         { type: "string", direction: "input", title: "Engine", name: "engine" },
         { type: "string[]", direction: "input", title: "Domain", name: "domain" },
@@ -290,6 +322,10 @@ export const search: WorkerRegistryItem = {
       ],
       search
     )
+
+    w.getTool = getTool
+
+    return w
   },
   get registry() { return search },
 }

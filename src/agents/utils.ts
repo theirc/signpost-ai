@@ -39,3 +39,7 @@ export function createModel(apiKeys: APIKeys, modelName: string) {
 
   return model
 }
+
+export function convertDocumentsToMarkdown(docs: VectorDocument[]) {
+  return `${docs.map((doc: VectorDocument) => `Title: ${doc.title}\nContent: ${doc.body}\nLink: ${doc.source}`).join("\n\n")}`
+}

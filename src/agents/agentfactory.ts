@@ -39,8 +39,8 @@ export function createAgent(config: AgentConfig) {
       const response = agent.getResponseWorker()
       if (input && response) {
 
-        const hasMessageHandles = Object.values(input.handles).some((h) => h.direction === "output" && h.type === "string" && h.name === "message")
         // const hasChatHandles = Object.values(input.handles).some((h) => h.direction === "output" && h.type === "chat" && h.name === "history")
+        const hasMessageHandles = Object.values(input.handles).some((h) => h.direction === "output" && h.type === "string" && h.name === "message")
         const hasResponseHandles = Object.values(response.handles).some((h) => h.direction === "input" && h.type === "string" && h.name === "response")
 
         return hasMessageHandles && hasResponseHandles
@@ -136,6 +136,12 @@ export function createAgent(config: AgentConfig) {
         p.uid = agent.debuguuid
       }
 
+      for (const key in agent.workers) {
+        const w = agent.workers[key]
+        w.agent = agent
+        w.executed = false
+      }
+
       const hasUid = p.uid && z.string().uuid().safeParse(p.uid).success
 
       if (hasUid) {
@@ -215,6 +221,7 @@ export function configureAgent(data: AgentConfig) {
 
     const factory = (workerRegistry[w.type] as WorkerRegistryItem)
     if (!factory) continue
+
     const wrk = factory.create(agent)
     Object.assign(wrk.config, rest)
 
@@ -237,6 +244,7 @@ export function configureAgent(data: AgentConfig) {
       delete wrk.handles[key]
       wrk.handles[h.id] = h
     }
+
   }
 
   for (const key in agent.workers) {
@@ -281,7 +289,6 @@ export async function saveAgent(agent: Agent, team_id?: string) {
 
     for (const key in w.handles) {
       const h = w.handles[key]
-      delete h.value
       delete h.value
       wc.handles[key] = h
     }
