@@ -16,6 +16,7 @@ import { tts } from "./workers/tts"
 import { translate } from "./workers/translate"
 import { promptAgent } from "./workers/promptAgent"
 import { handoffAgent } from "./workers/handoffAgent"
+import { template } from "./workers/template"
 
 
 type WorkerCategories = "io" | "generator" | "debug" | "tool"
@@ -60,5 +61,6 @@ export const workerRegistry = {
   translate,
   promptAgent,
   handoffAgent,
+  template,
 
 } satisfies { [index: string]: WorkerRegistryItem }

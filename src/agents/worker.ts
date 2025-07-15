@@ -98,9 +98,12 @@ export function buildWorker(w: WorkerConfig) {
     get id() {
       return w.id
     },
-
     set id(v: string) {
       w.id = v
+    },
+
+    get type() {
+      return w.type
     },
 
     get handles() {
