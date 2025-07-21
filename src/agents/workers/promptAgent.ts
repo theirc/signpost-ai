@@ -2,11 +2,6 @@ import { AgentInputItem, FunctionTool, Agent as OpenAIAgent, run, tool, user } f
 import { aisdk } from '@openai/agents-extensions'
 import { z } from 'zod'
 import { createModel } from '../utils'
-import { supabase } from '../db'
-import { Database, Tables } from '../supabase'
-import { CoreMessage, generateText } from 'ai'
-
-type HistoryItem = Partial<Database["public"]["Tables"]["history"]["Insert"]>
 
 declare global {
   type HistoryMode = "none" | "full" | "sumarized"
@@ -18,10 +13,6 @@ declare global {
     }
     parameters: {
       model?: string
-      history?: HistoryMode
-      maxHistory?: number
-      sumarizePrompt?: string
-      sumarizationModel?: string
     }
     fields: {
       input: NodeIO
@@ -33,9 +24,6 @@ declare global {
     }
   }
 }
-
-const sumarizePrompt = "Sumarize the chat history and keep the most important points of the conversation, return only the summary."
-
 
 async function contextExtractor(instructions: string, context: any, model: any, userHandlers: NodeIO[], history: AgentInputItem[]) {
   if (userHandlers.length === 0) return context
@@ -113,37 +101,8 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
     }
   }
 
-  const historyType = worker.parameters.history || "none"
-  const maxHistory = worker.parameters.maxHistory || 100
-  const sumarizationPrompt = worker.parameters.sumarizePrompt || sumarizePrompt
-  let history: AgentInputItem[] = worker.fields.history.value
-  let hasHistory = !history && p.uid && historyType != "none"
+  let history: AgentInputItem[] = worker.fields.history.value || []
 
-  worker.state.context ||= {}
-  worker.state.history ||= []
-
-  if (hasHistory) {
-    const dbHistory = await supabase.from("history").select("*")
-      .eq("uid", p.uid)
-      .eq("agent", `${p.agent.id}`)
-      .eq("worker", worker.id).order("id", { ascending: true })
-
-    if (dbHistory.error) {
-      console.log("DB Error", dbHistory.error)
-      worker.error = dbHistory.error.toString()
-      return
-    }
-    if (dbHistory.data) history = dbHistory.data.map((h) => {
-      h.payload["__FROM_DB__"] = true
-      return h.payload as any
-    })
-  }
-
-  history ||= []
-  const initialHistory = [...history]
-  console.log("History", initialHistory)
-
-  // const { history } = worker.state
   const model = aisdk(baseModel)
   const instructions = worker.fields.instructions.value
   const input = worker.fields.input.value
@@ -179,7 +138,6 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
     tools,
   })
 
-
   agent.on("agent_handoff", (ctx, agent) => {
     console.log(`👉 LLM Agent handoff to Agent with description '${agent.handoffDescription}'`)
   })
@@ -194,56 +152,15 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
 
   console.log("Result History:", result.history)
 
-  if (hasHistory) {
+  const historyWorkers = worker.getConnectedWokersToHandle(worker.fields.history, p).filter((w) => w.config.type === "chatHistory") as any as ChatHistoryWorker[]
+  const hw = historyWorkers[0]
 
-    let newItems = result.history.filter((h: any) => !h.__FROM_DB__)
-
-
-    if (historyType === "sumarized" && maxHistory && result.history.length > maxHistory) {
-
-      console.log("Summarizing History")
-
-      const model = createModel(p.apiKeys, worker.parameters.sumarizationModel ||= "openai/gpt-4-turbo")
-      let messages = result.history.filter((h: AgentInputItem) => h.type == "message").map((h: AgentInputItem) => {
-        if (h.type == "message") return { role: h.role, content: (h.content[0] as any)?.text } satisfies CoreMessage
-      })
-
-      messages = [{
-        role: "system",
-        content: sumarizationPrompt
-      }, ...messages]
-
-      const { text } = await generateText({
-        model,
-        temperature: 0,
-        messages,
-      })
-
-      newItems = [{ type: "message", role: "system", content: [{ type: "text", text }] }] as any
-      await supabase.from("history").delete().eq("uid", p.uid)
-      console.log("Summarized History", text)
-
-    }
-
-    for (const item of newItems) {
-      await supabase.from("history").insert({
-        uid: p.uid,
-        agent: `${p.agent.id}`,
-        worker: worker.id,
-        arguments: (item as any).arguments,
-        content: (item as any).content,
-        name: (item as any).name,
-        role: (item as any).role,
-        status: (item as any).status,
-        type: item.type,
-        payload: item
-      } satisfies HistoryItem)
-    }
-
+  if (hw) {
+    console.log("History Worker", hw)
+    await hw.saveHistory(hw, p, result.history)
   }
 
   worker.fields.output.value = result.finalOutput
-  worker.state.history = result.history
 
 }
 
@@ -260,15 +177,8 @@ export const promptAgent: WorkerRegistryItem = {
         conditionable: true,
         parameters: {
           model: "openai/gpt-4.1",
-          sumarizePrompt,
-          history: "none",
-          maxHistory: 100,
-          sumarizationModel: "openai/gpt-4-turbo",
         },
-        state: {
-          context: {},
-          history: [],
-        }
+        state: {}
       },
       [
         { type: "string", direction: "input", title: "Input", name: "input" },
