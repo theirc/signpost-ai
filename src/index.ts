@@ -5,7 +5,7 @@ import morgan from 'morgan'
 import { agents } from './agents'
 import { supabase } from './agents/db'
 
-const version = '1.0716.1028'
+const version = '1.0721.1514'
 
 const app = express()
 app.use(cors())
