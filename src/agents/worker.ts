@@ -319,6 +319,7 @@ export function buildWorker(w: WorkerConfig) {
       for (const e of Object.values(agent.edges)) {
         if (e.targetHandle in w.handles) {
           const cw = workers[e.source]
+          if (!cw || !cw.handles) continue
           const source = cw.handles[e.sourceHandle]
           const target = w.handles[e.targetHandle]
           connwh.push({
