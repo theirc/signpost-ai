@@ -411,6 +411,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bots_collection_id_fkey"
+            columns: ["collection"]
+            isOneToOne: false
+            referencedRelation: "collections_with_counts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "bots_system_prompt_id_fkey"
             columns: ["system_prompt_id"]
             isOneToOne: false
@@ -488,6 +495,13 @@ export type Database = {
             columns: ["collection_id"]
             isOneToOne: false
             referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_sources_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections_with_counts"
             referencedColumns: ["id"]
           },
           {
@@ -1043,6 +1057,13 @@ export type Database = {
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_teams_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users_with_teams"
+            referencedColumns: ["id"]
+          },
         ]
       }
       users: {
@@ -1107,7 +1128,60 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      collections_with_counts: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          name: string | null
+          sourceCount: number | null
+          team_id: string | null
+          vectorizedCount: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collections_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      users_with_teams: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          email: string | null
+          first_name: string | null
+          id: string | null
+          language: Json | null
+          last_name: string | null
+          location: string | null
+          role: string | null
+          role_name: string | null
+          status: string | null
+          team: string | null
+          team_ids: string[] | null
+          team_names: string | null
+          title: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "users_role_fkey"
+            columns: ["role"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "users_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       match_collections: {
