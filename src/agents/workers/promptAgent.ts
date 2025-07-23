@@ -138,6 +138,8 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
     tools,
   })
 
+  let searchContext = ""
+
   agent.on("agent_handoff", (ctx, agent) => {
     console.log(`👉 LLM Agent handoff to Agent with description '${agent.handoffDescription}'`)
   })
@@ -145,6 +147,7 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
     console.log(`🔨 LLM Agent Tool '${b.name}' Start`, b, ctx)
   })
   agent.on("agent_tool_end", (ctx, b) => {
+    if (ctx['searchResults']) searchContext += `\n\nSearch Results for tool ${b.name}:\n${ctx['searchResults']}`
     console.log(`🔨 LLM Agent Tool '${b.name}' End`, b, ctx)
   })
 
@@ -157,7 +160,7 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
 
   if (hw) {
     console.log("History Worker", hw)
-    await hw.saveHistory(hw, p, result.history)
+    await hw.saveHistory(hw, p, result.history, searchContext)
   }
 
   worker.fields.output.value = result.finalOutput

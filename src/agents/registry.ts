@@ -18,6 +18,7 @@ import { promptAgent } from "./workers/promptAgent"
 import { handoffAgent } from "./workers/handoffAgent"
 import { template } from "./workers/template"
 import { chatHistory } from "./workers/chathistory"
+import { structured } from "./workers/structuredoutput"
 
 
 type WorkerCategories = "io" | "generator" | "debug" | "tool"
@@ -46,6 +47,7 @@ export const workerRegistry = {
 
   ai,
   schema,
+  structured,
   agentWorker,
   text,
 

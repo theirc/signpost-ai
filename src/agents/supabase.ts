@@ -552,6 +552,7 @@ export type Database = {
           name: string | null
           payload: Json | null
           role: string | null
+          searchContext: string | null
           status: string | null
           type: string | null
           uid: string | null
@@ -566,6 +567,7 @@ export type Database = {
           name?: string | null
           payload?: Json | null
           role?: string | null
+          searchContext?: string | null
           status?: string | null
           type?: string | null
           uid?: string | null
@@ -580,6 +582,7 @@ export type Database = {
           name?: string | null
           payload?: Json | null
           role?: string | null
+          searchContext?: string | null
           status?: string | null
           type?: string | null
           uid?: string | null
