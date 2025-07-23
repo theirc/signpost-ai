@@ -221,7 +221,7 @@ async function execute(worker: SearchWorker, { apiKeys }: AgentParameters) {
 
   } else {
     // --- External Engine Search Path (Weaviate, Exa, etc.) --- 
-    const domain = Array.isArray(worker.parameters.domain) ? worker.parameters.domain : [worker.parameters.domain]
+    const domain = Array.isArray(worker.fields.domain.value) ? worker.fields.domain.value : [worker.fields.domain.value]
     const limit = worker.parameters.maxResults || 5
     const externalSearchDistance = worker.parameters.distance ?? 0.5 // Use distance, default 0.5
 
@@ -278,12 +278,17 @@ function getTool(w: SearchWorker, p: AgentParameters): ToolConfig {
       query: z.string().describe("The search query to execute."),
     }),
 
-    async execute({ query }) {
-      console.log(`🔎  Executing search Tool with query: ${query}`)
+    async execute(args, ctx) {
+      const { query } = args
+      console.log(`🔎 Executing Search Tool with query: ${query}`)
       w.fields.input.value = query
       await w.execute(p)
       const results = w.fields.output.value as VectorDocument[] || []
-      return convertDocumentsToMarkdown(results)
+      const mddocs = convertDocumentsToMarkdown(results)
+      ctx['searchResults'] = mddocs
+      console.log(`🔎 Search Tool executed. result: ${mddocs}`)
+
+      return mddocs
     },
   }
 

@@ -18,7 +18,7 @@ declare global {
     fields: {
       output: NodeIO
     }
-    saveHistory(worker: ChatHistoryWorker, p: AgentParameters, history: AgentInputItem[]): Promise<void>
+    saveHistory(worker: ChatHistoryWorker, p: AgentParameters, history: AgentInputItem[], searchContext?: string): Promise<void>
 
   }
 }
@@ -55,11 +55,14 @@ async function execute(worker: ChatHistoryWorker, p: AgentParameters) {
 
 }
 
-async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, history: AgentInputItem[]) {
+async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, history: AgentInputItem[], searchContext?: string) {
 
-  console.log("Saving History", history)
 
   if (!p.uid) return
+
+  console.log("Saving History", history)
+  console.log("Search Context", searchContext)
+
   const historyType = worker.parameters.history || "full"
   const keepLatest = worker.parameters.keepLatest || 100
   const sumarizeWhen = worker.parameters.sumarizeWhen || 200
@@ -97,8 +100,8 @@ async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, histor
     newItems = history
   }
 
-  for (const item of newItems) {
-    await supabase.from("history").insert({
+  const newItemsToSave = newItems.map((item: AgentInputItem) => {
+    return {
       uid: p.uid,
       agent: `${p.agent.id}`,
       worker: worker.id,
@@ -108,9 +111,28 @@ async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, histor
       role: (item as any).role,
       status: (item as any).status,
       type: item.type,
-      payload: item
-    } satisfies HistoryItem)
-  }
+      payload: item,
+      searchContext
+    }
+  }) satisfies HistoryItem[]
+
+  await supabase.from("history").insert(newItemsToSave)
+
+  // for (const item of newItems) {
+  //   await supabase.from("history").insert({
+  //     uid: p.uid,
+  //     agent: `${p.agent.id}`,
+  //     worker: worker.id,
+  //     arguments: (item as any).arguments,
+  //     content: (item as any).content,
+  //     name: (item as any).name,
+  //     role: (item as any).role,
+  //     status: (item as any).status,
+  //     type: item.type,
+  //     payload: item,
+  //     searchContext
+  //   } satisfies HistoryItem)
+  // }
 
 }
 
