@@ -72,13 +72,15 @@ async function execute(worker: StructuredOutputWorker, p: AgentParameters) {
   const model = createModel(p.apiKeys, worker.parameters.model || "openai/gpt-4o")
 
   let history: UserMessageItem[] = worker.fields.history.value || []
-  history = history.filter((h) => h.type !== "message" && (h.role == "user" || h.role == "assistant") && h.content && h.content.length > 0)
+  history = history.filter((h) => h.type == "message" && h.content)
+  // history = history.filter((h) => !h.content)
+  // history = history.filter((h) => h.type !== "message" && (h.role == "user" || h.role == "assistant") && h.content && h.content.length > 0)
 
   let messages: CoreMessage[] = []
 
   messages = history.map((m) => ({
     role: m.role,
-    content: m.content,
+    content: (m.content[0] as any || { text: "" }).text,
   })) as any
 
   messages = [
