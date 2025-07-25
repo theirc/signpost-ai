@@ -26,8 +26,6 @@ declare global {
 const sumarizePrompt = "Sumarize the chat history and keep the most important points of the conversation, return only the summary."
 
 async function execute(worker: ChatHistoryWorker, p: AgentParameters) {
-  // Empty execute function for now
-  // worker.fields.output.value = []
 
   if (!p.uid) {
     worker.error = "No uuid provided"
@@ -46,6 +44,7 @@ async function execute(worker: ChatHistoryWorker, p: AgentParameters) {
     worker.error = dbHistory.error.toString()
     return
   }
+
   if (dbHistory.data) history = dbHistory.data.map((h) => {
     h.payload["__FROM_DB__"] = true
     return h.payload as any
@@ -57,45 +56,83 @@ async function execute(worker: ChatHistoryWorker, p: AgentParameters) {
 
 async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, history: AgentInputItem[], searchContext?: string) {
 
-
   if (!p.uid) return
 
   console.log("Saving History", history)
   console.log("Search Context", searchContext)
 
   const historyType = worker.parameters.history || "full"
-  const keepLatest = worker.parameters.keepLatest || 100
-  const sumarizeWhen = worker.parameters.sumarizeWhen || 200
+  const keepLatest = Number(worker.parameters.keepLatest) || 100
+  const sumarizeWhen = Number(worker.parameters.sumarizeWhen) || 200
   const sumarizationPrompt = worker.parameters.sumarizePrompt || sumarizePrompt
 
   let newItems = history.filter((h: any) => !h.__FROM_DB__)
+  let oldMessages = history.filter((h: any) => !!h.__FROM_DB__)
 
-  if (historyType === "sumarized" && keepLatest && history.length > sumarizeWhen) {
+  if (historyType === "sumarized") {
 
-    const latestItems = history.slice(-keepLatest)
-    const nonLatestItems = history.slice(0, -keepLatest)
+    console.log("Summarizing History...")
 
-    console.log("Summarizing History", latestItems, nonLatestItems)
+    if (oldMessages.length > sumarizeWhen + keepLatest) {
 
-    const model = createModel(p.apiKeys, worker.parameters.sumarizationModel ||= "openai/gpt-4-turbo")
-    let messages = history.filter((h: AgentInputItem) => h.type == "message").map((h: AgentInputItem) => {
-      if (h.type == "message") return { role: h.role, content: (h.content[0] as any)?.text } satisfies CoreMessage
-    })
+      const dbHistory = await supabase.from("history").select("*")
+        .eq("uid", p.uid)
+        .eq("type", "message")
+        .eq("agent", `${p.agent.id}`)
+        .eq("worker", worker.id).order("id", { ascending: true })
 
-    messages = [{
-      role: "system",
-      content: sumarizationPrompt
-    }, ...messages]
+      const oldItems = (dbHistory.data || [])
 
-    const { text } = await generateText({
-      model,
-      temperature: 0,
-      messages,
-    })
+      const toRemoveLength = oldItems.length - keepLatest
 
-    newItems = [{ type: "message", role: "system", content: [{ type: "text", text }] }] as any
-    await supabase.from("history").delete().eq("uid", p.uid)
-    console.log("Summarized History", text)
+      if (toRemoveLength > 0) {
+
+        const messagesToDelete = oldItems.slice(0, toRemoveLength)
+
+        let messages = messagesToDelete.map((h) => {
+          if (h.type == "message") return { role: h.role as any, content: (h.content[0] as any)?.text } satisfies CoreMessage
+        })
+
+        console.log(`Deleting ${messagesToDelete.length} Messages`)
+        const model = createModel(p.apiKeys, worker.parameters.sumarizationModel ||= "openai/gpt-4-turbo")
+
+        messages = [{
+          role: "system",
+          content: sumarizationPrompt
+        }, ...messages]
+
+        const { text } = await generateText({
+          model,
+          temperature: 0,
+          messages,
+        })
+
+        console.log("Summarized History: ", text)
+
+        const idsTodelete = messagesToDelete.map((h: any) => h.id)
+        const minId = Math.min(...idsTodelete)
+
+        console.log("Min id:", minId)
+        await supabase.from("history").delete().in("id", idsTodelete)
+
+        await supabase.from("history").insert({
+          id: minId,
+          uid: p.uid,
+          agent: `${p.agent.id}`,
+          worker: worker.id,
+          type: "message",
+          role: "system",
+          content: [{ text }],
+          payload: { role: "system", type: "message", content: [{ text, type: "text" }] }
+        } satisfies HistoryItem)
+      }
+
+    }
+
+    /*
+    {"role": "system", "type": "message", "content": [{"text": "Name: Guillermo\nEmail: rev@email.com\nCourse: Curso 1", "type": "text"}]}
+    */
+
   }
 
   const newItemsToSave = newItems.map((item: AgentInputItem) => {
@@ -115,22 +152,6 @@ async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, histor
   }) satisfies HistoryItem[]
 
   await supabase.from("history").insert(newItemsToSave)
-
-  // for (const item of newItems) {
-  //   await supabase.from("history").insert({
-  //     uid: p.uid,
-  //     agent: `${p.agent.id}`,
-  //     worker: worker.id,
-  //     arguments: (item as any).arguments,
-  //     content: (item as any).content,
-  //     name: (item as any).name,
-  //     role: (item as any).role,
-  //     status: (item as any).status,
-  //     type: item.type,
-  //     payload: item,
-  //     searchContext
-  //   } satisfies HistoryItem)
-  // }
 
 }
 
