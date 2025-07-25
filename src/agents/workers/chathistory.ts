@@ -96,8 +96,6 @@ async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, histor
     newItems = [{ type: "message", role: "system", content: [{ type: "text", text }] }] as any
     await supabase.from("history").delete().eq("uid", p.uid)
     console.log("Summarized History", text)
-  } else {
-    newItems = history
   }
 
   const newItemsToSave = newItems.map((item: AgentInputItem) => {
