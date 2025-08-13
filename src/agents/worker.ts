@@ -18,6 +18,7 @@ export const inputOutputTypes = {
   handoff: "Handoff",
   date: "Date",
   tool: "Tool",
+  file: "File",
 }
 
 interface WorkerCondition {

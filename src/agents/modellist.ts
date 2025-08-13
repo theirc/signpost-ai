@@ -4,6 +4,9 @@ declare global {
 }
 
 const openAiModels = [
+  'gpt-5',
+  'gpt-5-mini',
+  'gpt-5-nano',
   'gpt-4.1',
   'gpt-4.1-mini',
   'gpt-4.1-nano',
@@ -16,6 +19,7 @@ const openAiModels = [
   'o3-pro',
   'o1',
   'gpt-4o',
+  'gpt-4o-search-preview',
   'chatgpt-4o-latest',
   'gpt-4o-mini',
   'gpt-4-turbo',
@@ -59,4 +63,3 @@ export const AllAIModels = [
   ...ClaudeModels,
   ...GoogleModels,
 ]
-

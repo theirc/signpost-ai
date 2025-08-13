@@ -18,7 +18,7 @@ declare global {
     fields: {
       output: NodeIO
     }
-    saveHistory(worker: ChatHistoryWorker, p: AgentParameters, history: AgentInputItem[], searchContext?: string): Promise<void>
+    saveHistory(worker: ChatHistoryWorker, p: AgentParameters, history: AgentInputItem[], searchContext?: string, inputTokens?: number, outputTokens?: number): Promise<void>
 
   }
 }
@@ -54,7 +54,7 @@ async function execute(worker: ChatHistoryWorker, p: AgentParameters) {
 
 }
 
-async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, history: AgentInputItem[], searchContext?: string) {
+async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, history: AgentInputItem[], searchContext?: string, inputTokens?: number, outputTokens?: number) {
 
   if (!p.uid) return
 
@@ -147,7 +147,9 @@ async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, histor
       status: (item as any).status,
       type: item.type,
       payload: item,
-      searchContext
+      searchContext,
+      inputTokens: inputTokens || 0,
+      outputTokens: outputTokens || 0,
     }
   }) satisfies HistoryItem[]
 

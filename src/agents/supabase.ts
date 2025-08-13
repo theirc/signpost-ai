@@ -49,6 +49,7 @@ export type Database = {
           team_id: string | null
           title: string | null
           type: Database["public"]["Enums"]["agent_types"] | null
+          versions: Json | null
           workers: Json | null
         }
         Insert: {
@@ -60,6 +61,7 @@ export type Database = {
           team_id?: string | null
           title?: string | null
           type?: Database["public"]["Enums"]["agent_types"] | null
+          versions?: Json | null
           workers?: Json | null
         }
         Update: {
@@ -71,6 +73,7 @@ export type Database = {
           team_id?: string | null
           title?: string | null
           type?: Database["public"]["Enums"]["agent_types"] | null
+          versions?: Json | null
           workers?: Json | null
         }
         Relationships: [
@@ -549,7 +552,9 @@ export type Database = {
           content: Json | null
           created_at: string
           id: number
+          inputTokens: number | null
           name: string | null
+          outputTokens: number | null
           payload: Json | null
           role: string | null
           searchContext: string | null
@@ -564,7 +569,9 @@ export type Database = {
           content?: Json | null
           created_at?: string
           id?: number
+          inputTokens?: number | null
           name?: string | null
+          outputTokens?: number | null
           payload?: Json | null
           role?: string | null
           searchContext?: string | null
@@ -579,7 +586,9 @@ export type Database = {
           content?: Json | null
           created_at?: string
           id?: number
+          inputTokens?: number | null
           name?: string | null
+          outputTokens?: number | null
           payload?: Json | null
           role?: string | null
           searchContext?: string | null
