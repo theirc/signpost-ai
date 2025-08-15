@@ -3,11 +3,11 @@ declare global {
   interface TextWorker extends AIWorker {
     fields: {
       output: NodeIO
-      condition: NodeIO
+      // condition: NodeIO
     },
     parameters: {
       text?: string
-      contentType?: "text" | "number" | "audio" | "image" | "file"
+      contentType?: "text" | "number" | "audio" | "image" | "file" | "Timestamp"
       contentUri?: string
       numberValue?: number
     }
@@ -26,6 +26,9 @@ async function execute(worker: TextWorker) {
     case "file":
       worker.fields.output.value = contentUri || ""
       break
+    case "Timestamp":
+      worker.fields.output.value = new Date()
+      break
     case "text":
     default:
       worker.fields.output.value = text || ""
@@ -43,17 +46,17 @@ export const text: WorkerRegistryItem = {
     return agent.initializeWorker(
       {
         type: "text",
+        conditionable: true,
         parameters: {
           contentType: "text",
         },
       },
       [
         { type: "string", direction: "output", title: "Output", name: "output" },
-        { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
+        // { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
       ],
       text
     )
   },
   get registry() { return text },
 }
-

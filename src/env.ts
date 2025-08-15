@@ -2,4 +2,6 @@
 export const env = {
   SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+  GOOGLE_TRANSLATE_API_KEY: process.env.GOOGLE_TRANSLATE_API_KEY,
+  GOOGLE_KEY: process.env.GOOGLE_KEY,
 }

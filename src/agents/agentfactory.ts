@@ -3,6 +3,7 @@ import { workerRegistry } from "./registry"
 import { buildWorker } from "./worker"
 import { ulid } from 'ulid'
 import { ApiWorker } from "./workers/api"
+import { z } from "zod"
 
 
 interface AgentConfig {
@@ -13,11 +14,19 @@ interface AgentConfig {
   type?: AgentTypes
   workers?: object
   team_id?: string
+  debuguuid?: string
+  versions?: AgentVersion[]
 }
 
 declare global {
   type AgentTypes = "conversational" | "data"
+  interface AgentVersion {
+    title?: string
+    date?: number
+    agent?: any
+  }
 }
+
 
 
 export function createAgent(config: AgentConfig) {
@@ -31,12 +40,31 @@ export function createAgent(config: AgentConfig) {
     set id(v: number) { config.id = v },
     get title() { return config.title },
     set title(v: string) { config.title = v },
+
+    versions: [] as AgentVersion[],
+
+    get isConversational() {
+      const input = agent.getInputWorker()
+      const response = agent.getResponseWorker()
+      if (input && response) {
+
+        // const hasChatHandles = Object.values(input.handles).some((h) => h.direction === "output" && h.type === "chat" && h.name === "history")
+        const hasMessageHandles = Object.values(input.handles).some((h) => h.direction === "output" && h.type === "string" && h.name === "message")
+        const hasResponseHandles = Object.values(response.handles).some((h) => h.direction === "input" && h.type === "string" && h.name === "response")
+
+        return hasMessageHandles && hasResponseHandles
+      }
+      return false
+    },
+
+
     edges,
     workers,
+    displayData: false,
 
     type: "data" as AgentTypes,
+    debuguuid: config.debuguuid || "",
     description: "",
-
 
     currentWorker: null as AIWorker,
     update() {
@@ -94,7 +122,6 @@ export function createAgent(config: AgentConfig) {
         w.error = null
         for (const key in w.handles) {
           const h = w.handles[key]
-          // if (h.persistent) continue
           h.value = h.default || undefined
         }
       }
@@ -106,23 +133,56 @@ export function createAgent(config: AgentConfig) {
       p.output ||= {}
       p.input ||= {}
       p.output ||= {}
-      p.apikeys ||= {}
+      p.apiKeys ||= {}
+      p.state ||= {
+        agent: {},
+        workers: {}
+      }
+      p.logWriter ||= () => { }
       p.agent = agent
+
+      if (p.debug && agent.debuguuid && !p.uid) {
+        p.uid = agent.debuguuid
+      }
+
+      for (const key in agent.workers) {
+        const w = agent.workers[key]
+        w.agent = agent
+        w.executed = false
+      }
+
+      const hasUid = p.uid && z.string().uuid().safeParse(p.uid).success
+
+      if (hasUid) {
+        const dbState = await supabase.from("states").select("*").eq("id", p.uid).single()
+        if (dbState.data) {
+          p.state = dbState.data.state as any
+          p.state ||= { agent: {}, workers: {} }
+          p.state.agent ||= {}
+          p.state.workers ||= {}
+        }
+      }
+
       console.log(`Executing agent '${agent.title}'`)
+
       const worker = agent.getResponseWorker()
       const apiWorkers = agent.getEndAPIWorkers(p)
+
       if (!worker && !apiWorkers.length) return
+
       try {
         await worker.execute(p)
-
         for (const w of apiWorkers) {
           await w.execute(p)
         }
+
+        if (hasUid) await supabase.from("states").upsert({ id: p.uid, state: p.state || {} })
 
       } catch (error) {
         console.error(error)
         p.error = error.toString()
       }
+
       agent.currentWorker = null
       agent.update()
     },
@@ -138,7 +198,9 @@ export function createAgent(config: AgentConfig) {
     },
 
     addWorker(w: WorkerConfig): AIWorker {
-      w.id ||= `NODE_${ulid()}`
+      const nameType = w.type?.toUpperCase() || "NODE"
+
+      w.id ||= `${nameType}_${ulid()}`
       w.handles ||= {}
       const worker = buildWorker(w)
       workers[w.id] = worker
@@ -160,14 +222,17 @@ export function configureAgent(data: AgentConfig) {
   const agent = createAgent(data)
   agent.type = data.type || "data"
   agent.description = data.description || ""
+  agent.versions = data.versions || []
+
 
   for (const w of workers) {
     const { handles, ...rest } = w
 
-    console.log("Loading worker: ", w.type)
+    // console.log("Loading worker: ", w.type)
 
     const factory = (workerRegistry[w.type] as WorkerRegistryItem)
     if (!factory) continue
+
     const wrk = factory.create(agent)
     Object.assign(wrk.config, rest)
 
@@ -190,6 +255,7 @@ export function configureAgent(data: AgentConfig) {
       delete wrk.handles[key]
       wrk.handles[h.id] = h
     }
+
   }
 
   for (const key in agent.workers) {
@@ -202,8 +268,7 @@ export function configureAgent(data: AgentConfig) {
 
 
 }
-
-export async function saveAgent(agent: Agent, team_id?: string) {
+export function getAgentToSave(agent: Agent, team_id?: string) {
 
   const agentData: AgentConfig = {
     title: agent.title,
@@ -211,9 +276,9 @@ export async function saveAgent(agent: Agent, team_id?: string) {
     type: agent.type,
     edges: agent.edges,
     team_id,
+    debuguuid: agent.debuguuid || "",
   }
   const workerlist = []
-
 
   for (const key in agent.workers) {
     const w = agent.workers[key].config
@@ -226,9 +291,13 @@ export async function saveAgent(agent: Agent, team_id?: string) {
       parameters: w.parameters || {},
       condition: w.condition || {}
     }
+    if (w.width && w.height) {
+      wc.width = w.width
+      wc.height = w.height
+    }
+
     for (const key in w.handles) {
       const h = w.handles[key]
-      delete h.value
       delete h.value
       wc.handles[key] = h
     }
@@ -240,6 +309,47 @@ export async function saveAgent(agent: Agent, team_id?: string) {
 
   agentData.workers = workerlist
 
+  return agentData
+
+}
+
+
+export function saveVersion(title: string, agent: Agent, team_id?: string) {
+
+  const agentData = getAgentToSave(agent, team_id)
+  const versions = agent.versions || []
+
+  const version = {
+    title,
+    date: new Date().valueOf(),
+    agent: agentData,
+  }
+
+  const serialized = JSON.parse(JSON.stringify(version))
+
+  agent.versions = [serialized, ...versions]
+
+}
+
+export function loadVersion(version: number, agent: Agent) {
+
+  const { versions, id } = agent
+  const av = agent.versions[version]
+  if (!av) return
+  const nac = configureAgent(av.agent)
+  nac.id = id
+  nac.versions = versions
+  return nac
+
+}
+
+
+
+export async function saveAgent(agent: Agent, team_id?: string) {
+
+  const agentData = getAgentToSave(agent, team_id)
+  agentData.versions = agent.versions
+
 
   if (agent.id) {
     await supabase.from("agents").update(agentData as any).eq("id", agent.id)
@@ -248,14 +358,13 @@ export async function saveAgent(agent: Agent, team_id?: string) {
     agent.id = data[0].id
   }
 
-
-  console.log(workerlist)
-
+  return agent
 
 }
 
 export async function loadAgent(id: number): Promise<Agent> {
-  console.log("Loading agent: ", id)
+
+  // console.log("Loading agent: ", id)
   const { data } = await supabase.from("agents").select("*").eq("id", id).single()
   const agent = configureAgent(data as any)
 
@@ -265,6 +374,7 @@ export async function loadAgent(id: number): Promise<Agent> {
       await w.loadAgent()
     }
   }
+
 
   return agent
 }

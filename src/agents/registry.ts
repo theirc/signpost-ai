@@ -10,10 +10,18 @@ import { search } from "./workers/search"
 import { text } from "./workers/text"
 import { api } from "./workers/api"
 import { documentSelector } from "./workers/documentselector"
+import { documentGenerator } from "./workers/documentgenerator"
 import { state } from "./workers/state"
 import { stt } from "./workers/stt"
 import { tts } from "./workers/tts"
 import { translate } from "./workers/translate"
+import { promptAgent } from "./workers/promptAgent"
+import { handoffAgent } from "./workers/handoffAgent"
+import { template } from "./workers/template"
+import { chatHistory } from "./workers/chathistory"
+import { structured } from "./workers/structuredoutput"
+import { tooltip } from "./workers/tooltip"
+import { message } from "./workers/message"
 
 
 type WorkerCategories = "io" | "generator" | "debug" | "tool"
@@ -42,12 +50,14 @@ export const workerRegistry = {
 
   ai,
   schema,
+  structured,
   agentWorker,
   text,
 
   search,
   combine,
   documentSelector,
+  documentGenerator,
 
   mock,
   display,
@@ -56,5 +66,11 @@ export const workerRegistry = {
   stt,
   tts,
   translate,
+  promptAgent,
+  handoffAgent,
+  template,
+  chatHistory,
+  tooltip,
+  message,
 
 } satisfies { [index: string]: WorkerRegistryItem }

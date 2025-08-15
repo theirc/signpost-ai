@@ -5,7 +5,6 @@ export interface ApiWorker extends AIWorker {
     body: NodeIO
     response: NodeIO
     error: NodeIO
-    condition: NodeIO // Ensure condition field exists if using ConditionHandler
     endpointUrlInput: NodeIO // Added new input field handle
   }
   parameters: {
@@ -25,6 +24,7 @@ function create(agent: Agent) {
   const worker = agent.initializeWorker(
     {
       type: "api",
+      conditionable: true,
       parameters: {
         // REMOVED localApiKeys: {}, 
         endpoint: '',
@@ -41,7 +41,6 @@ function create(agent: Agent) {
       { type: "string", direction: "input", title: "Body", name: "body" },
       { type: "string", direction: "output", title: "Response", name: "response" },
       { type: "string", direction: "output", title: "Error", name: "error" },
-      { type: "unknown", direction: "input", title: "Condition", name: "condition", condition: true },
       { type: "string", direction: "input", title: "Endpoint URL", name: "endpointUrlInput" },
     ],
     api
@@ -53,7 +52,7 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
   const logPrefix = `[API Worker (${worker.id})]`
   console.log(`${logPrefix} - Executing with parameters:`, worker.parameters)
   console.log(`${logPrefix} - Input body value:`, worker.fields.body.value)
-  console.log(`${logPrefix} - Provided AgentParameters.apikeys:`, p.apikeys ? Object.keys(p.apikeys) : 'None')
+  console.log(`${logPrefix} - Provided AgentParameters.apikeys:`, p.apiKeys ? Object.keys(p.apiKeys) : 'None')
 
   try {
     // --- Common Setup --- 
@@ -119,7 +118,7 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
       } else {
         console.log(`${logPrefix} - Key '${selectedKeyName}' not found or empty in environment variables. Checking AgentParameters...`)
         // 2. If not in env, check AgentParameters.apikeys
-        const paramKeyValue = p.apikeys?.[selectedKeyName]
+        const paramKeyValue = p.apiKeys?.[selectedKeyName]
         if (paramKeyValue !== undefined) {
           actualValue = paramKeyValue
           // DO NOT log the actual key value here for security

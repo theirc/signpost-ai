@@ -1,5 +1,6 @@
 import { ulid } from "ulid"
 import { loadAgent } from "./agentfactory"
+import { ZodObject } from "zod"
 
 export const inputOutputTypes = {
   string: "Text",
@@ -14,23 +15,27 @@ export const inputOutputTypes = {
   chat: "Chat",
   json: "JSON",
   audio: "Audio",
-  // image: "Image",
-  // video: "Video",
-  // execute: "Execute",
+  handoff: "Handoff",
+  date: "Date",
+  tool: "Tool",
+  file: "File",
 }
 
 interface WorkerCondition {
-  operator?: "equals" | "notEquals" | "gt" | "lt" | "gte" | "lte" | "between" | "contains" | "notContains"
+  operator?: WorkerOperators
   value?: any
   value2?: any // For "between" operator
 }
 
+
 declare global {
 
-  type AIWorker = ReturnType<typeof buildWorker>
+  type AIWorker = ReturnType<typeof buildWorker> & { agent?: Agent }
 
   type WorkerHandles = { [index: string]: NodeIO }
   type IOTypes = keyof typeof inputOutputTypes
+
+  type WorkerOperators = "equals" | "notEquals" | "gt" | "lt" | "gte" | "lte" | "between" | "contains" | "notContains" | "isEmpty" | "isNotEmpty"
 
   interface NodeIO {
     id?: string
@@ -45,6 +50,9 @@ declare global {
     value?: any
     default?: any
     mock?: string | number
+    operator?: WorkerOperators
+    conditionValue1?: any
+    conditionValue2?: any
   }
 
   interface WorkerConfig {
@@ -54,15 +62,25 @@ declare global {
     parameters?: object
     x?: number
     y?: number
+    width?: number
+    height?: number
     condition?: WorkerCondition
+    conditionable?: boolean
+    state?: any
   }
+
+  interface ToolConfig {
+    description?: string
+    parameters?: ZodObject<any>
+    execute?(args: any, ctx?: any): Promise<string>
+  }
+
 }
 
 
 export function buildWorker(w: WorkerConfig) {
 
   w.handles = w.handles || {}
-  w.condition ||= {}
   const fields: { [index: string]: NodeIO } = {}
 
   const worker = {
@@ -72,14 +90,21 @@ export function buildWorker(w: WorkerConfig) {
     executed: false,
     error: null as string,
 
+    get conditionable() {
+      return w.conditionable
+    },
+
     referencedAgent: null, //this cannot be typed because it causes circular references. Cast to Agent when needed
 
     get id() {
       return w.id
     },
-
     set id(v: string) {
       w.id = v
+    },
+
+    get type() {
+      return w.type
     },
 
     get handles() {
@@ -98,29 +123,50 @@ export function buildWorker(w: WorkerConfig) {
     },
 
     parameters: w.parameters as any || {},
+    state: {},
     values: {},
     fields,
 
     async execute(p: AgentParameters) {
-      worker.error = null
+
       if (worker.executed) return
       worker.executed = true
+      worker.error = null
+      const prevWorker = p.agent.currentWorker
+
+      if (!p.state.workers) p.state.workers = {}
+      worker.state = p.state.workers[worker.id] || {}
 
       await worker.getValues(p)
 
       console.log("Worker - Executing: ", w.type)
+      p.logWriter({
+        worker,
+        state: p.state,
+      })
 
-      const cond = Object.values(worker.handles).filter(h => h.condition)[0]
-      if (cond) {
-        // console.log("Worker - Condition: ", cond)
-        const conditionMet = worker.evaluateCondition(cond.value)
-        if (!conditionMet) {
-          console.log(`Worker ${w.type} - Condition not met`)
+      const conditions = worker.handlersArray.filter(h => h.condition)
+
+      if (conditions.length > 0) {
+
+        let someConditionsMet = false
+
+        for (const cond of conditions) {
+          // console.log(`Worker '${w.type}' condition:`, cond)
+          const conditionMet = worker.evaluateCondition(cond)
+          if (conditionMet) {
+            someConditionsMet = true
+            break
+          }
+        }
+        if (!someConditionsMet) {
+          // console.log(`Worker '${w.type}' - Conditions not met`)
           worker.updateWorker()
-          p.agent.currentWorker = null
+          p.agent.currentWorker = prevWorker
           p.agent.update()
           return
         }
+
       }
 
       p.agent.currentWorker = worker
@@ -137,55 +183,76 @@ export function buildWorker(w: WorkerConfig) {
         throw error
       }
 
+      p.state.workers[worker.id] = worker.state || {}
+
       p.agent.update()
       worker.updateWorker()
-      p.agent.currentWorker = null
+      p.agent.currentWorker = prevWorker
       p.agent.update()
 
     },
 
-    evaluateCondition(condValue: any): boolean {
-      const { operator, value, value2 } = worker.condition
+    getTool(w: any, p: AgentParameters): ToolConfig {
+      return null
+    },
+    getTools(w: any, p: AgentParameters): ToolConfig[] {
 
-      if (operator === "equals") {
-        return condValue === value
+      const connected = worker.getConnectedWokersToHandle(worker.fields.tool, p)
+      const tools: ToolConfig[] = []
+
+      for (const c of connected) {
+        const { description, parameters, execute } = c.getTool(c, p)
+        if (!description) throw new Error(`Worker does not have a Tool Description parameter set. Please set it to describe the tool's purpose.`)
+        tools.push({
+          description,
+          parameters,
+          execute,
+        })
       }
 
-      if (operator === "notEquals") {
-        return condValue !== value
+      return tools
+    },
+
+
+    evaluateCondition(handle: NodeIO): boolean {
+      let { value, conditionValue1, conditionValue2, operator, type } = handle
+
+      if (type === "boolean") {
+        value = !!value
+        conditionValue1 = !!conditionValue1
+        if (operator === "equals") return conditionValue1 == value
+        if (operator === "notEquals") return conditionValue1 != value
       }
 
-      // String operators
-      if (typeof condValue === "string" && typeof value === "string") {
-        if (operator === "contains") {
-          return condValue.includes(value)
-        }
-        if (operator === "notContains") {
-          return !condValue.includes(value)
-        }
+      if (type === "string" || type === "enum") {
+        value ||= ""
+        conditionValue1 ||= ""
+        if (typeof value !== "string") value = String(value)
+        if (typeof conditionValue1 !== "string") conditionValue1 = String(conditionValue1)
+
+        if (operator === "equals") return conditionValue1 == value
+        if (operator === "notEquals") return conditionValue1 != value
+        if (operator === "contains") return conditionValue1.includes(value)
+        if (operator === "notContains") return !conditionValue1.includes(value)
+        if (operator === "isEmpty") return value == ""
+        if (operator === "isNotEmpty") return value != ""
       }
 
-      // Number operators
-      if (typeof condValue === "number" && typeof value === "number") {
-        if (operator === "gt") {
-          return condValue > value
-        }
-        if (operator === "lt") {
-          return condValue < value
-        }
-        if (operator === "gte") {
-          return condValue >= value
-        }
-        if (operator === "lte") {
-          return condValue <= value
-        }
-        if (operator === "between" && typeof value2 === "number") {
-          return condValue >= value && condValue <= value2
-        }
+      if (type === "number") {
+        if (typeof value !== "number") value = Number(value)
+        if (typeof conditionValue1 !== "number") conditionValue1 = Number(conditionValue1)
+        if (conditionValue2 && typeof conditionValue2 !== "number") conditionValue2 = Number(conditionValue2)
+        if (value) value = 0
+        if (conditionValue1) conditionValue1 = 0
+        if (conditionValue2) conditionValue2 = 0
+        if (operator === "equals") return conditionValue1 == value
+        if (operator === "notEquals") return conditionValue1 != value
+        if (operator === "gt") return value > conditionValue1
+        if (operator === "lt") return value < conditionValue1
+        if (operator === "gte") return value >= conditionValue1
+        if (operator === "lte") return value <= conditionValue1
+        if (operator === "between") return value >= conditionValue1 && value <= conditionValue2
       }
-
-      // Boolean fallback (for backward compatibility)
-      return (!!value) === (!!condValue)
     },
 
     async getValues(p: AgentParameters) {
@@ -248,19 +315,45 @@ export function buildWorker(w: WorkerConfig) {
     getConnectedWokers(p: AgentParameters) {
       const { agent, agent: { workers } } = p
 
-      const connected: AIWorker[] = []
       const connwh: { worker: AIWorker, source: NodeIO, target: NodeIO }[] = []
 
       for (const e of Object.values(agent.edges)) {
         if (e.targetHandle in w.handles) {
           const cw = workers[e.source]
-          connected.push(cw)
+          if (!cw || !cw.handles) continue
+          const source = cw.handles[e.sourceHandle]
+          const target = w.handles[e.targetHandle]
           connwh.push({
             worker: cw,
-            source: cw.handles[e.sourceHandle],
-            target: w.handles[e.targetHandle]
+            source,
+            target,
           })
 
+        }
+      }
+      return connwh
+    },
+
+    getConnectedWokersToHandle(h: NodeIO, p: AgentParameters) {
+      const { agent, agent: { workers } } = p
+
+      const connwh: AIWorker[] = []
+      if (!h) return connwh
+
+      const addedWorkers: { [index: string]: AIWorker } = {}
+
+      for (const e of Object.values(agent.edges)) {
+        if (e.targetHandle === h.id) {
+          const cw = workers[e.source]
+          if (!cw || addedWorkers[cw.id]) continue
+          addedWorkers[cw.id] = cw
+          connwh.push(cw)
+        }
+        if (e.sourceHandle === h.id) {
+          const cw = workers[e.target]
+          if (!cw || addedWorkers[cw.id]) continue
+          addedWorkers[cw.id] = cw
+          connwh.push(cw)
         }
       }
       return connwh
@@ -310,6 +403,10 @@ export function buildWorker(w: WorkerConfig) {
 
     getUserHandlers() {
       return Object.values(w.handles || {}).filter(h => !h.system)
+    },
+
+    getHandlersArray() {
+      return Object.values(w.handles || {})
     },
 
     async loadAgent() {
