@@ -12,6 +12,7 @@ declare global {
   type ChatHistory = {
     role: "user" | "assistant"
     content: string
+    files?: any[]
     //ToDo: add timestamp
   }[]
 

@@ -96,25 +96,31 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
   let searchContext = ""
 
   agent.on("agent_handoff", (ctx, agent) => {
-    console.log(`👉 LLM Agent handoff to Agent with description '${agent.handoffDescription}'`)
+    const message = `LLM Agent handoff to Agent with description '${agent.handoffDescription}'`
+    p.agent.log({ type: "handoff", message, })
+    console.log(message)
   })
   agent.on("agent_tool_start", (ctx, b) => {
-    console.log(`🔨 LLM Agent Tool '${b.name}' Start`, b, ctx)
+    const message = `LLM Agent Tool '${b.name}' Start`
+    p.agent.log({ type: "tool_start", message, })
+    console.log(message, b, ctx)
   })
   agent.on("agent_tool_end", (ctx, b) => {
+    const message = `LLM Agent Tool '${b.name}' End`
+    p.agent.log({ type: "tool_end", message, })
     if (ctx['searchResults']) searchContext += `\n\nSearch Results for tool ${b.name}:\n${ctx['searchResults']}`
-    console.log(`🔨 LLM Agent Tool '${b.name}' End`, b, ctx)
+    console.log(message, b, ctx)
   })
 
   const result = await run(agent, history)
   console.log("Agent State:", result.state)
 
-  let inputTokens = 0
-  let outputTokens = 0
+  worker.inputTokens = 0
+  worker.outputTokens = 0
   const state: AgentStateResponse = result.state as any
   if (state && state._context && state._context.usage) {
-    inputTokens = state._context.usage.inputTokens || 0
-    outputTokens = state._context.usage.outputTokens || 0
+    worker.inputTokens = state._context.usage.inputTokens || 0
+    worker.outputTokens = state._context.usage.outputTokens || 0
   }
 
   console.log("Result History:", result.history)
@@ -124,7 +130,7 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
 
   if (hw) {
     console.log("History Worker", hw)
-    await hw.saveHistory(hw, p, result.history, searchContext, inputTokens, outputTokens)
+    await hw.saveHistory(hw, p, result.history, searchContext, worker.inputTokens, worker.outputTokens)
   }
 
   worker.fields.output.value = result.finalOutput
