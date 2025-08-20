@@ -98,12 +98,14 @@ declare global {
       condition: NodeIO
     },
     parameters: {
-      engine?: "weaviate" | "exa" | "supabase"
+      engine?: "weaviate" | "exa" | "supabase" | "databricks"
       maxResults?: number
       domain?: string[]
       distance?: number
       collections?: string[]
       toolDescription?: string
+      databricksEndpoint?: string
+      databricksIndex?: string
     }
   }
 
@@ -219,6 +221,54 @@ async function execute(worker: SearchWorker, { apiKeys }: AgentParameters) {
       finalResults = []
     }
 
+  } else if (engine === 'databricks') {
+
+    const authToken = apiKeys.databricks
+    const index = worker.parameters.databricksIndex
+    const endpoint = worker.parameters.databricksEndpoint
+
+    if (!authToken) {
+      worker.error = "Databricks API key is required."
+      return
+    }
+    if (!index) {
+      worker.error = "Databricks index is required."
+      return
+    }
+    if (!endpoint) {
+      worker.error = "Databricks endpoint is required."
+      return
+    }
+    const url = `${endpoint}/api/2.0/vector-search/indexes/${index}/query`
+    console.log(`[Databricks Path] Searching index '${index}' at ${url} with query:`, query)
+
+    const body = {
+      url,
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+      columns: ["course_id", "content"],
+      num_results: worker.parameters.maxResults || 5,
+      query_text: query
+    }
+
+    const rdata = await axios.post("https://signpost-ia-app-qa.azurewebsites.net/decors", body)
+    const results = rdata.data as DatabricksResponse
+
+    let count = 1
+    for (const row of results.result.data_array) {
+      const [position, body, score] = row
+      finalResults.push({
+        title: `Document ${count}`,
+        body,
+        ref: `databricks:${count}`,
+      })
+      count++
+    }
+
+    console.log(`[Databricks Path] Search results from Databricks:`, results)
+
+
   } else {
     // --- External Engine Search Path (Weaviate, Exa, etc.) --- 
     const domain = Array.isArray(worker.fields.domain.value) ? worker.fields.domain.value : [worker.fields.domain.value]
@@ -333,5 +383,19 @@ export const search: WorkerRegistryItem = {
     return w
   },
   get registry() { return search },
+}
+
+interface DatabricksResponse {
+  manifest: {
+    column_count: number
+    columns: {
+      name: string
+    }[]
+  },
+  result: {
+    row_count: number
+    data_array: [position: number, content: string, score: number][]
+  },
+  next_page_token: string
 }
 

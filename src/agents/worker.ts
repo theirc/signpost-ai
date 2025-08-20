@@ -89,6 +89,8 @@ export function buildWorker(w: WorkerConfig) {
     registry: null as WorkerRegistryItem,
     executed: false,
     error: null as string,
+    inputTokens: 0,
+    outputTokens: 0,
 
     get conditionable() {
       return w.conditionable
@@ -152,7 +154,6 @@ export function buildWorker(w: WorkerConfig) {
         let someConditionsMet = false
 
         for (const cond of conditions) {
-          // console.log(`Worker '${w.type}' condition:`, cond)
           const conditionMet = worker.evaluateCondition(cond)
           if (conditionMet) {
             someConditionsMet = true
@@ -160,7 +161,6 @@ export function buildWorker(w: WorkerConfig) {
           }
         }
         if (!someConditionsMet) {
-          // console.log(`Worker '${w.type}' - Conditions not met`)
           worker.updateWorker()
           p.agent.currentWorker = prevWorker
           p.agent.update()
@@ -177,6 +177,18 @@ export function buildWorker(w: WorkerConfig) {
 
       try {
         await worker.registry.execute(worker, p)
+
+        await p.agent.log({
+          type: "execution",
+          worker: worker.type,
+          handles: worker.handles,
+          parameters: worker.parameters,
+          inputTokens: worker.inputTokens,
+          outputTokens: worker.outputTokens,
+          workerId: worker.id,
+        })
+
+
       } catch (error) {
         error = error.toString()
         worker.error = error
@@ -409,9 +421,21 @@ export function buildWorker(w: WorkerConfig) {
       return Object.values(w.handles || {})
     },
 
-    async loadAgent() {
+    async loadAgent(teamId?: string) {
       if (!worker.parameters || !worker.parameters.agent) return
-      const agent = await loadAgent(worker.parameters.agent)
+
+      if (!teamId) {
+        console.warn(`Cannot load referenced agent ${worker.parameters.agent} without team ID`)
+        return
+      }
+
+      const agent = await loadAgent(worker.parameters.agent, teamId)
+
+      if (!agent) {
+        console.warn(`Referenced agent ${worker.parameters.agent} not found or not accessible for current team`)
+        return
+      }
+
       const inp = agent.getInputWorker()
       const out = agent.getResponseWorker()
       if (!inp || !out) return
