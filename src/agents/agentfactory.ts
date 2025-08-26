@@ -57,9 +57,7 @@ export function createAgent(config: AgentConfig) {
     set id(v: number) { config.id = v },
     get title() { return config.title },
     set title(v: string) { config.title = v },
-    state: {} as AgentParameters,
 
-    versions: [] as AgentVersion[],
 
     get isConversational() {
       const input = agent.getInputWorker()
@@ -77,11 +75,14 @@ export function createAgent(config: AgentConfig) {
     workers,
     displayData: true,
 
+    state: {} as AgentParameters,
     type: "data" as AgentTypes,
     debuguuid: config.debuguuid || "",
     description: "",
-
     currentWorker: null as AIWorker,
+    versions: [] as AgentVersion[],
+    execution: null as string,
+
     update() {
       //Used to update the UI in front end
     },
@@ -132,6 +133,7 @@ export function createAgent(config: AgentConfig) {
 
     reset() {
       agent.state = {}
+      agent.execution = ulid()
       for (const key in workers) {
         const w = workers[key]
         w.executed = false
@@ -209,9 +211,11 @@ export function createAgent(config: AgentConfig) {
       try {
         await supabase.from("logs").insert({
           ...l,
+          execution: agent.execution,
           agent: agent.id as any,
           team_id: agent.state.team,
           session: agent.state.session,
+          uid: agent.state.uid
         } as any)
       } catch (error) {
         console.error("Error logging agent event:", error)

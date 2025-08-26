@@ -1,9 +1,7 @@
 import { createOpenAI } from '@ai-sdk/openai'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
-import { createDeepSeek } from '@ai-sdk/deepseek'
 import { createGroq } from '@ai-sdk/groq'
-import { createXai } from '@ai-sdk/xai'
 
 
 export function createModel(apiKeys: APIKeys, modelName: string) {
@@ -29,12 +27,8 @@ export function createModel(apiKeys: APIKeys, modelName: string) {
     model = createAnthropic({ apiKey })(modelID)
   } else if (provider === "google") {
     model = createGoogleGenerativeAI({ apiKey })(modelID)
-  } else if (provider === "deepseek") {
-    model = createDeepSeek({ apiKey })(modelID)
   } else if (provider === "groq") {
     model = createGroq({ apiKey })(modelID)
-  } else if (provider === "xai") {
-    model = createXai({ apiKey })(modelID)
   }
 
   return model
