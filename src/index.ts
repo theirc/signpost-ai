@@ -5,7 +5,7 @@ import morgan from 'morgan'
 import { agents } from './agents'
 import { supabase } from './agents/db'
 
-const version = '1.0815.1608'
+const version = '1.0826.1400'
 
 const app = express()
 app.use(cors())
@@ -34,7 +34,7 @@ app.post('/agent', async (req: Request<any, any, AgentParameters & { id: number,
       return
     }
 
-    const a = await agents.loadAgent(input.id)
+    const a = await agents.loadAgent(input.id, input.team_id)
 
     let apiKeys = {}
     if (input.team_id) {

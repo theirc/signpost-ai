@@ -321,16 +321,19 @@ async function execute(worker: MessageWorker) {
             }
           }
           
-          // Send the text content (without media since we sent it separately)
-          await sendTelerivetMessage(worker, toNumber, cleanPart, routeId, quickRepliesForPart, [], isBrowser);
-          
-          // Add delay between message parts like Cloudscript
-          if (i < messageParts.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        }
-      }
-      return; // Exit early since we handled the message parts
+                     // Send the text content (without media since we sent it separately)
+           const apiResponse = await sendTelerivetMessage(worker, toNumber, cleanPart, routeId, quickRepliesForPart, [], isBrowser);
+           
+           // Add delay between message parts like Cloudscript
+           if (i < messageParts.length - 1) {
+             await new Promise(resolve => setTimeout(resolve, 500));
+           }
+         }
+       }
+       
+       // Set output based on actual results
+       worker.fields.output.value = `All message parts sent successfully to ${toNumber}`
+       return; // Exit early since we handled the message parts
     }
     
     // Single message - handle like Cloudscript: media first, then text with quick replies
@@ -345,24 +348,31 @@ async function execute(worker: MessageWorker) {
       }
     }
     
-    // Then send text content with quick replies - split if too long
-    const cleanText = cleanMessage(processedContent);
-    const textMessages = splitMessageForWhatsApp(cleanText);
-    
-    for (let i = 0; i < textMessages.length; i++) {
-      const messageText = textMessages[i];
-      const quickRepliesForMessage = (i === textMessages.length - 1) ? quickReplies : [];
-      
-      await sendTelerivetMessage(worker, toNumber, messageText, routeId, quickRepliesForMessage, [], isBrowser);
-      
-      // Add delay between split messages if not the last one
-      if (i < textMessages.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    }
-    
-    // Set success output
-    worker.fields.output.value = `Message sent successfully to ${toNumber}`
+         // Then send text content with quick replies - split if too long
+     const cleanText = cleanMessage(processedContent);
+     const textMessages = splitMessageForWhatsApp(cleanText);
+     
+     let lastApiResponse: any = null;
+     
+     for (let i = 0; i < textMessages.length; i++) {
+       const messageText = textMessages[i];
+       const quickRepliesForMessage = (i === textMessages.length - 1) ? quickReplies : [];
+       
+       const apiResponse = await sendTelerivetMessage(worker, toNumber, messageText, routeId, quickRepliesForMessage, [], isBrowser);
+       if (apiResponse) lastApiResponse = apiResponse;
+       
+       // Add delay between split messages if not the last one
+       if (i < textMessages.length - 1) {
+         await new Promise(resolve => setTimeout(resolve, 500));
+       }
+     }
+     
+     // Set success output with actual API results
+     if (lastApiResponse) {
+       worker.fields.output.value = `Message sent successfully to ${toNumber}. API Response: ${JSON.stringify(lastApiResponse)}`
+     } else {
+       worker.fields.output.value = `Message sent successfully to ${toNumber}`
+     }
     
   } catch (error: any) {
     worker.fields.output.value = `Error sending message: ${error.message}`
