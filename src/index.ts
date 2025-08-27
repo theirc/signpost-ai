@@ -6,7 +6,7 @@ import axios, { AxiosRequestConfig } from 'axios'
 import { agents } from './agents'
 import { supabase } from './agents/db'
 
-const version = '1.0860.1404'
+const version = '1.0827.1647'
 
 const app = express()
 app.use(cors())
