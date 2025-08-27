@@ -15,16 +15,19 @@ declare global {
     xai?: string
     zendesk?: string
     googleTranslate?: string
+    databricks?: string
   }
 
   interface AgentParameters {
     debug?: boolean
-    input: any
+    input?: any
     uid?: string
     output?: any
     agent?: Agent
     error?: string
     apiKeys?: APIKeys
+    team?: string
+    session?: string
     state?: {
       agent: {}
       workers: { [key: string]: any }

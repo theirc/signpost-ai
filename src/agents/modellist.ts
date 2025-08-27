@@ -1,6 +1,6 @@
 
 declare global {
-  type ModelProviders = "openai" | "anthropic" | "google" | "deepseek" | "groq" | "xai"
+  type ModelProviders = "openai" | "anthropic" | "google" | "groq"
 }
 
 const openAiModels = [

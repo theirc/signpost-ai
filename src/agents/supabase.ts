@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
@@ -22,10 +22,10 @@ export type Database = {
     Functions: {
       graphql: {
         Args: {
+          extensions?: Json
           operationName?: string
           query?: string
           variables?: Json
-          extensions?: Json
         }
         Returns: Json
       }
@@ -358,7 +358,7 @@ export type Database = {
           knowledge_sources: Json | null
           last_run: string | null
           memory: boolean | null
-          model: string
+          model: string | null
           name: string
           system_prompt: string | null
           system_prompt_id: string | null
@@ -377,7 +377,7 @@ export type Database = {
           knowledge_sources?: Json | null
           last_run?: string | null
           memory?: boolean | null
-          model: string
+          model?: string | null
           name: string
           system_prompt?: string | null
           system_prompt_id?: string | null
@@ -396,7 +396,7 @@ export type Database = {
           knowledge_sources?: Json | null
           last_run?: string | null
           memory?: boolean | null
-          model?: string
+          model?: string | null
           name?: string
           system_prompt?: string | null
           system_prompt_id?: string | null
@@ -434,13 +434,6 @@ export type Database = {
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "fk_bots_model"
-            columns: ["model"]
-            isOneToOne: false
-            referencedRelation: "models"
-            referencedColumns: ["id"]
-          },
         ]
       }
       chat_history: {
@@ -452,6 +445,7 @@ export type Database = {
           created_at: string
           id: string
           role: string | null
+          session_id: string | null
           team_id: string | null
           user_id: string | null
         }
@@ -463,6 +457,7 @@ export type Database = {
           created_at?: string
           id?: string
           role?: string | null
+          session_id?: string | null
           team_id?: string | null
           user_id?: string | null
         }
@@ -474,6 +469,7 @@ export type Database = {
           created_at?: string
           id?: string
           role?: string | null
+          session_id?: string | null
           team_id?: string | null
           user_id?: string | null
         }
@@ -551,6 +547,7 @@ export type Database = {
           arguments: Json | null
           content: Json | null
           created_at: string
+          execution: string | null
           id: number
           inputTokens: number | null
           name: string | null
@@ -558,7 +555,9 @@ export type Database = {
           payload: Json | null
           role: string | null
           searchContext: string | null
+          session_id: string | null
           status: string | null
+          team: string | null
           type: string | null
           uid: string | null
           worker: string | null
@@ -568,6 +567,7 @@ export type Database = {
           arguments?: Json | null
           content?: Json | null
           created_at?: string
+          execution?: string | null
           id?: number
           inputTokens?: number | null
           name?: string | null
@@ -575,7 +575,9 @@ export type Database = {
           payload?: Json | null
           role?: string | null
           searchContext?: string | null
+          session_id?: string | null
           status?: string | null
+          team?: string | null
           type?: string | null
           uid?: string | null
           worker?: string | null
@@ -585,6 +587,7 @@ export type Database = {
           arguments?: Json | null
           content?: Json | null
           created_at?: string
+          execution?: string | null
           id?: number
           inputTokens?: number | null
           name?: string | null
@@ -592,7 +595,9 @@ export type Database = {
           payload?: Json | null
           role?: string | null
           searchContext?: string | null
+          session_id?: string | null
           status?: string | null
+          team?: string | null
           type?: string | null
           uid?: string | null
           worker?: string | null
@@ -669,31 +674,55 @@ export type Database = {
           agent: string | null
           created_at: string
           execution: string | null
-          handles: Json[] | null
+          handles: Json | null
           id: string
+          inputTokens: number | null
+          message: string | null
+          outputTokens: number | null
+          parameters: Json | null
+          session: string | null
           state: Json | null
           team_id: string | null
+          type: string | null
+          uid: string | null
           worker: string | null
+          workerId: string | null
         }
         Insert: {
           agent?: string | null
           created_at?: string
           execution?: string | null
-          handles?: Json[] | null
+          handles?: Json | null
           id?: string
+          inputTokens?: number | null
+          message?: string | null
+          outputTokens?: number | null
+          parameters?: Json | null
+          session?: string | null
           state?: Json | null
           team_id?: string | null
+          type?: string | null
+          uid?: string | null
           worker?: string | null
+          workerId?: string | null
         }
         Update: {
           agent?: string | null
           created_at?: string
           execution?: string | null
-          handles?: Json[] | null
+          handles?: Json | null
           id?: string
+          inputTokens?: number | null
+          message?: string | null
+          outputTokens?: number | null
+          parameters?: Json | null
+          session?: string | null
           state?: Json | null
           team_id?: string | null
+          type?: string | null
+          uid?: string | null
           worker?: string | null
+          workerId?: string | null
         }
         Relationships: []
       }
@@ -701,36 +730,25 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
-          model_id: string
-          name: string
+          model: string | null
           provider: string | null
-          team_id: string | null
+          title: string | null
         }
         Insert: {
           created_at?: string | null
           id?: string
-          model_id: string
-          name: string
+          model?: string | null
           provider?: string | null
-          team_id?: string | null
+          title?: string | null
         }
         Update: {
           created_at?: string | null
           id?: string
-          model_id?: string
-          name?: string
+          model?: string | null
           provider?: string | null
-          team_id?: string | null
+          title?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "models_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       projects: {
         Row: {
@@ -1206,22 +1224,22 @@ export type Database = {
     Functions: {
       match_collections: {
         Args: {
-          query_embedding: string
-          match_threshold: number
           match_count: number
+          match_threshold: number
+          query_embedding: string
         }
         Returns: {
+          created_at: string
           id: string
           name: string
-          created_at: string
           similarity: number
         }[]
       }
       match_documents: {
         Args: { query_text: string }
         Returns: {
-          id: string
           content: string
+          id: string
           name: string
           similarity: number
           source_type: string
@@ -1229,15 +1247,15 @@ export type Database = {
       }
       similarity_search: {
         Args: {
+          match_count: number
+          match_threshold: number
           query_vector: string
           target_collection_id: string
-          match_threshold: number
-          match_count: number
         }
         Returns: {
+          content: string
           id: string
           name: string
-          content: string
           similarity: number
           source_type: string
         }[]
