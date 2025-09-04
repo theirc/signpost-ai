@@ -6,5 +6,3 @@ ENV N8N_BASIC_AUTH_ACTIVE=true \
     N8N_PROTOCOL=https \
     N8N_EDITOR_BASE_URL=https://n8n-signpost.azurewebsites.net \
     N8N_PUBLIC_API_BASE_URL=https://n8n-signpost.azurewebsites.net
-
-    #Testing weebhook with CI Build Pipeline
