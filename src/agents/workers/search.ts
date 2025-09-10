@@ -85,6 +85,7 @@ declare global {
     fields: {
       input: NodeIO
       output: NodeIO
+      textOutput: NodeIO
       references: NodeIO
 
       tool: NodeIO
@@ -310,7 +311,10 @@ async function execute(worker: SearchWorker, { apiKeys }: AgentParameters) {
   }
 
   // --- Set Output --- 
-  worker.fields.output.value = deduped
+  // Always provide both formats
+  worker.fields.output.value = deduped  // Documents format
+  worker.fields.textOutput.value = convertDocumentsToMarkdown(deduped)  // Text format
+  
   worker.fields.references.value = deduped.map(d => ({
     link: d.ref || d.source || "",
     title: d.title || "Search Result"
@@ -365,6 +369,7 @@ export const search: WorkerRegistryItem = {
       [
         { type: "string", direction: "input", title: "Input", name: "input" },
         { type: "doc", direction: "output", title: "Documents", name: "output" },
+        { type: "string", direction: "output", title: "Text Output", name: "textOutput" },
         { type: "references", direction: "output", title: "References", name: "references" },
 
         { type: "tool", direction: "input", title: "Tool", name: "tool" },
