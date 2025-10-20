@@ -5,8 +5,9 @@ import morgan from 'morgan'
 import axios, { AxiosRequestConfig } from 'axios'
 import { agents } from './agents'
 import { supabase } from './agents/db'
+import { executeCronJobs } from './cron'
 
-const version = '1.0911.1440'
+const version = '1.1020.1930'
 
 const app = express()
 app.use(cors())
@@ -144,6 +145,17 @@ app.all('/decors', async (req: Request, res: Response): Promise<void> => {
   }
 })
 
+
+app.post('/cron', async (req, res) => {
+
+  try {
+    await executeCronJobs()
+    res.send("Cron jobs executed")
+  } catch (error) {
+    console.error("Error executing cron jobs:", error)
+    res.status(500).send("Error executing cron jobs")
+  }
+})
 
 
 app.listen(3000, () => {
