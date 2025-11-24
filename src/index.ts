@@ -6,8 +6,9 @@ import axios, { AxiosRequestConfig } from 'axios'
 import { agents } from './agents'
 import { supabase } from './agents/db'
 import { executeCronJobs } from './cron'
+import Exa from 'exa-js'
 
-const version = '1.1020.1930'
+const version = '1.1124.1430'
 
 const app = express()
 app.use(cors())
@@ -77,7 +78,6 @@ app.post('/agent', async (req: Request<any, any, AgentParameters & { id: number,
     res.status(500).send(er)
   }
 })
-
 
 
 app.all('/decors', async (req: Request, res: Response): Promise<void> => {
@@ -154,6 +154,39 @@ app.post('/cron', async (req, res) => {
   } catch (error) {
     console.error("Error executing cron jobs:", error)
     res.status(500).send("Error executing cron jobs")
+  }
+})
+
+app.post('/exa', async (req, res) => {
+
+  let { query, domain, limit, key } = (req.body || {})
+
+  if (!query || !domain || !key) {
+    res.status(400).send("Missing required parameters")
+    return
+  }
+
+  try {
+
+    const exa = new Exa(key)
+
+    const result = await exa.searchAndContents(
+      query,
+      {
+        type: "auto",
+        useAutoprompt: true,
+        numResults: limit || 10,
+        text: true,
+        includeDomains: [domain],
+      }
+    )
+
+    res.send(result.results || {})
+    res.end()
+
+  } catch (error) {
+    console.error("Error executing exa search:", error)
+    res.status(500).send("Error executing exa search")
   }
 })
 
