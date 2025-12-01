@@ -16,6 +16,8 @@ declare global {
     zendesk?: string
     googleTranslate?: string
     databricks?: string
+    exa?: string
+    jina?: string
   }
 
   interface AgentParameters {

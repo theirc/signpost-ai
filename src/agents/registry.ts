@@ -22,6 +22,8 @@ import { chatHistory } from "./workers/chathistory"
 import { structured } from "./workers/structuredoutput"
 import { tooltip } from "./workers/tooltip"
 import { message } from "./workers/message"
+import { vectorSearch } from "./workers/vectorsearch"
+import { onboard } from "./workers/onboard"
 
 
 type WorkerCategories = "io" | "generator" | "debug" | "tool"
@@ -72,5 +74,8 @@ export const workerRegistry = {
   chatHistory,
   tooltip,
   message,
+
+  vectorSearch,
+  onboard,
 
 } satisfies { [index: string]: WorkerRegistryItem }
