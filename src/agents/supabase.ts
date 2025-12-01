@@ -524,6 +524,38 @@ export type Database = {
           },
         ]
       }
+      kbsources: {
+        Row: {
+          created_at: string
+          id: string
+          sources: Json | null
+          team: string | null
+          title: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          sources?: Json | null
+          team?: string | null
+          title?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          sources?: Json | null
+          team?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kbsources_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       live_data_elements: {
         Row: {
           content: string
@@ -1055,6 +1087,71 @@ export type Database = {
           },
         ]
       }
+      vectors: {
+        Row: {
+          content: string | null
+          created_at: string
+          error: string | null
+          filename: string | null
+          id: number
+          isChunk: boolean | null
+          locale: string | null
+          location: unknown
+          name: string | null
+          reference: number | null
+          size: number | null
+          status: number | null
+          team: string | null
+          tokens: number | null
+          url: string | null
+          vector: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          error?: string | null
+          filename?: string | null
+          id?: number
+          isChunk?: boolean | null
+          locale?: string | null
+          location?: unknown
+          name?: string | null
+          reference?: number | null
+          size?: number | null
+          status?: number | null
+          team?: string | null
+          tokens?: number | null
+          url?: string | null
+          vector?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          error?: string | null
+          filename?: string | null
+          id?: number
+          isChunk?: boolean | null
+          locale?: string | null
+          location?: unknown
+          name?: string | null
+          reference?: number | null
+          size?: number | null
+          status?: number | null
+          team?: string | null
+          tokens?: number | null
+          url?: string | null
+          vector?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vectors_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       collections_with_counts: {
@@ -1134,6 +1231,40 @@ export type Database = {
           name: string
           similarity: number
           source_type: string
+        }[]
+      }
+      match_vectors: {
+        Args: {
+          bbox_max_lat?: number
+          bbox_max_lon?: number
+          bbox_min_lat?: number
+          bbox_min_lon?: number
+          filter_ids?: number[]
+          filter_is_chunk?: boolean
+          filter_locale?: string
+          filter_status?: number
+          match_count?: number
+          max_distance_meters?: number
+          origin_lat?: number
+          origin_lon?: number
+          query_embedding: string
+          similarity?: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          distance: number
+          filename: string
+          id: number
+          ischunk: boolean
+          locale: string
+          location: unknown
+          name: string
+          reference: number
+          size: number
+          status: number
+          team: string
+          url: string
         }[]
       }
       similarity_search: {

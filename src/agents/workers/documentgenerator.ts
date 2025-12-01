@@ -497,6 +497,62 @@ function parseMarkdownText(text: string): TextRun[] {
   return textRuns
 }
 
+async function uploadFileTemporarily(fileData: { buffer: Uint8Array, mimeType: string, filename: string }): Promise<string | null> {
+  try {
+    const { buffer, mimeType, filename } = fileData;
+    
+    // Import supabase (dynamic import to handle different environments)
+    const { supabase } = await import('../db');
+    
+    // Create a unique filename for temporary storage
+    const tempFileName = `temp-documents/${Date.now()}-${Math.random().toString(36).substring(7)}-${filename}`;
+    
+    // Convert buffer to File/Blob for upload
+    const fileBlob = new Blob([new Uint8Array(buffer)], { type: mimeType });
+    
+    // Upload to Supabase storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('documents')
+      .upload(tempFileName, fileBlob, {
+        cacheControl: '300', // Cache for 5 minutes
+        upsert: false // Don't overwrite, each upload should be unique
+      });
+
+    if (uploadError) {
+      console.error('Supabase upload error:', uploadError);
+      return null;
+    }
+
+    // Create signed URL that expires in 5 minutes
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+      .from('documents')
+      .createSignedUrl(uploadData.path, 300);
+
+    if (signedUrlError) {
+      console.error('Signed URL creation error:', signedUrlError);
+      return null;
+    }
+
+    console.log(`Temporary document uploaded: ${tempFileName}, expires in 5 minutes`);
+    
+    // Schedule cleanup after 6 minutes (1 minute buffer)
+    setTimeout(async () => {
+      try {
+        await supabase.storage.from('documents').remove([uploadData.path]);
+        console.log(`Cleaned up temporary document: ${tempFileName}`);
+      } catch (cleanupError) {
+        console.error('Error cleaning up temporary document:', cleanupError);
+      }
+    }, 360000); // 6 minutes
+
+    return signedUrlData.signedUrl;
+
+  } catch (error) {
+    console.error('Error uploading document:', error);
+    return null;
+  }
+}
+
 async function generateFile(content: string, type: string): Promise<Uint8Array> {
   if (type === 'csv') return generateCsv(content)
   if (type === 'pdf') return await generatePdf(content)
@@ -529,20 +585,23 @@ async function execute(worker: AIWorker) {
         mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     }
     
-    worker.fields.output.value = {
-      content: inputValue,
-      type: docType,
-      filename,
+    // Upload to temporary storage and get URL
+    const fileUrl = await uploadFileTemporarily({
       buffer,
-      mimeType
+      mimeType,
+      filename
+    })
+    
+    if (!fileUrl) {
+      worker.fields.output.value = `Error: Failed to upload generated ${docType} file`
+      return
     }
+    
+    // Return URL string like text worker does
+    worker.fields.output.value = fileUrl
   } catch (error) {
     console.error('Document generation error:', error)
-    worker.fields.output.value = {
-      error: `Failed to generate ${docType}: ${error.message}`,
-      type: docType,
-      filename: `error.${docType === 'pdf' ? 'pdf' : docType === 'csv' ? 'csv' : 'docx'}`
-    }
+    worker.fields.output.value = `Error: Failed to generate ${docType}: ${error.message}`
   }
 }
 
@@ -557,7 +616,7 @@ export const documentGenerator: WorkerRegistryItem = {
       { type: 'documentGenerator' },
       [
         { type: 'string', direction: 'input', title: 'AI Input', name: 'input' },
-        { type: 'file', direction: 'output', title: 'Generated File', name: 'output' },
+        { type: 'file', direction: 'output', title: 'Generated File URL', name: 'output' },
       ],
       documentGenerator,
       { doc: 'docx' }

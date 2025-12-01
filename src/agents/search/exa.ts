@@ -1,27 +1,54 @@
-import Exa from 'exa-js'
-const exa = new Exa(process.env.EXA_API_KEY)
+import axios from 'axios'
 
-export async function searchExa(q: SearchParams) {
+export async function searchExa(p: VectorSerach) {
 
-  const docs: VectorDocument[] = []
+  let { query, domain, limit, keys } = p
+  limit = limit || 10
 
-  const result = await exa.searchAndContents(
-    q.query,
-    {
-      type: "auto",
-      useAutoprompt: true,
-      numResults: q.limit || 10,
-      text: true,
-      includeDomains: q.domains,
-    }
-  )
+  let results: VectorDocument[] = []
 
-  for (const r of result.results) {
-    docs.push({
-      title: r.title,
+  if (!keys.exa) {
+    console.log("Exa: No api key provided.")
+    throw new Error("Exa: No api key provided.")
+  }
+
+  const r = await axios.post('https://signpost-ia-app-qa.azurewebsites.net/exa', {
+    query,
+    limit,
+    domain,
+    key: keys.exa
+  })
+
+  const data = r.data || []
+
+  for (const r of data) {
+    results.push({
       source: r.url,
-      body: r.text
+      body: r.text,
+      title: r.title,
+      origin: "exa"
     })
   }
-  return docs
+
+  // const exa = new Exa(keys.exa)
+  // const result = await exa.searchAndContents(
+  //   query,
+  //   {
+  //     type: "auto",
+  //     useAutoprompt: true,
+  //     numResults: limit || 10,
+  //     text: true,
+  //     includeDomains: [domain],
+  //   }
+  // )
+  // for (const r of result.results) {
+  //   results.push({
+  //     source: r.url,
+  //     body: r.text,
+  //     title: r.title,
+  //   })
+  // }
+
+  return results
+
 }
