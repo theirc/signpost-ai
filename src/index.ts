@@ -8,7 +8,7 @@ import { supabase } from './agents/db'
 import { executeCronJobs } from './cron'
 import Exa from 'exa-js'
 
-const version = '1.1201.1415'
+const version = '1.1204.1210'
 
 const app = express()
 app.use(cors())
@@ -161,7 +161,7 @@ app.post('/exa', async (req, res) => {
 
   let { query, domain, limit, key } = (req.body || {})
 
-  if (!query || !domain || !key) {
+  if (!query || !key) {
     res.status(400).send("Missing required parameters")
     return
   }
@@ -170,16 +170,16 @@ app.post('/exa', async (req, res) => {
 
     const exa = new Exa(key)
 
-    const result = await exa.searchAndContents(
-      query,
-      {
-        type: "auto",
-        useAutoprompt: true,
-        numResults: limit || 10,
-        text: true,
-        includeDomains: [domain],
-      }
-    )
+    const q: any = {
+      type: "auto",
+      useAutoprompt: true,
+      numResults: limit || 10,
+      text: true,
+    }
+
+    if (domain) q.includeDomains = [domain]
+
+    const result = await exa.searchAndContents(query, q)
 
     res.send(result.results || {})
     res.end()
