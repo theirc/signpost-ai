@@ -314,7 +314,7 @@ async function execute(worker: SearchWorker, { apiKeys }: AgentParameters) {
   // Always provide both formats
   worker.fields.output.value = deduped  // Documents format
   worker.fields.textOutput.value = convertDocumentsToMarkdown(deduped)  // Text format
-  
+
   worker.fields.references.value = deduped.map(d => ({
     link: d.ref || d.source || "",
     title: d.title || "Search Result"
