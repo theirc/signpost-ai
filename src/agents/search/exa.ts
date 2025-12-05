@@ -4,6 +4,7 @@ export async function searchExa(p: VectorSerach) {
 
   let { query, domain, limit, keys } = p
   limit = limit || 10
+  domain = domain || ""
 
   let results: VectorDocument[] = []
 

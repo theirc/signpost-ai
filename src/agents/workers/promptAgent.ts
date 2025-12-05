@@ -62,8 +62,21 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
   let history: AgentInputItem[] = worker.fields.history.value || []
 
   const model = aisdk(baseModel)
-  const instructions = worker.fields.instructions.value
+  let instructions = worker.fields.instructions.value || ""
   const input = worker.fields.input.value
+
+  const now = new Date()
+  const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
+  const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }
+  const formattedDate = now.toLocaleDateString("en-US", dateOptions as any)
+  const formattedTime = now.toLocaleTimeString("en-US", timeOptions as any)
+
+  instructions = `
+  The current date is ${formattedDate} and the current time is ${formattedTime}.
+
+  ${instructions}
+  `
+
 
   history.push(user(input || ""))
 

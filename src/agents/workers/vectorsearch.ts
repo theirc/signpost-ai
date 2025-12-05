@@ -4,16 +4,7 @@ import { doVectorSearch } from "../search"
 
 declare global {
 
-  interface Source {
-    type: VectorSearchEngines
-    sources?: number[]
-    chunked?: boolean
-    locale?: string
-    domain?: string
-    distance?: number
-    results?: number
-    url?: string
-  }
+
 
   interface VectorSearchWorker extends AIWorker {
     fields: {

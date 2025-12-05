@@ -2,6 +2,16 @@ import OpenAI from "openai"
 
 declare global {
   type SupportedVectorExtensions = keyof typeof supportedExtensions
+  interface Source {
+    type: VectorSearchEngines
+    sources?: number[]
+    chunked?: boolean
+    locale?: string
+    domain?: string
+    distance?: number
+    results?: number
+    url?: string
+  }
 }
 
 const supportedExtensions = {
@@ -20,7 +30,6 @@ const supportedExtensions = {
   "webp": "image/webp",
   "gif": "image/gif",
 }
-
 
 
 export async function createEmbedding(input: string, apiKey: string) {
