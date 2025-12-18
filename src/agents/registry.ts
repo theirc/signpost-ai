@@ -24,6 +24,7 @@ import { tooltip } from "./workers/tooltip"
 import { message } from "./workers/message"
 import { vectorSearch } from "./workers/vectorsearch"
 import { onboard } from "./workers/onboard"
+import { lookup } from "./workers/lookup"
 
 
 type WorkerCategories = "io" | "generator" | "debug" | "tool"
@@ -77,5 +78,6 @@ export const workerRegistry = {
 
   vectorSearch,
   onboard,
+  lookup,
 
 } satisfies { [index: string]: WorkerRegistryItem }

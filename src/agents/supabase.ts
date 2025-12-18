@@ -46,6 +46,7 @@ export type Database = {
           description: string | null
           edges: Json | null
           id: number
+          status: string | null
           team_id: string | null
           title: string | null
           type: Database["public"]["Enums"]["agent_types"] | null
@@ -58,6 +59,7 @@ export type Database = {
           description?: string | null
           edges?: Json | null
           id?: number
+          status?: string | null
           team_id?: string | null
           title?: string | null
           type?: Database["public"]["Enums"]["agent_types"] | null
@@ -70,6 +72,7 @@ export type Database = {
           description?: string | null
           edges?: Json | null
           id?: number
+          status?: string | null
           team_id?: string | null
           title?: string | null
           type?: Database["public"]["Enums"]["agent_types"] | null
