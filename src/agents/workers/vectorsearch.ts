@@ -39,7 +39,7 @@ declare global {
     locale?: string
     lat?: number
     lon?: number
-    origin?: "supabase" | "exa" | "weaviate" | "jina" | "databricks"
+    origin?: "supabase" | "exa" | "weaviate" | "jina" | "databricks" | "youtube"
   }
 }
 
