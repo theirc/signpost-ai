@@ -18,6 +18,7 @@ declare global {
     databricks?: string
     exa?: string
     jina?: string
+    youtube?: string
   }
 
   interface AgentParameters {

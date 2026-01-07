@@ -6,6 +6,7 @@ declare global {
       quickReplies: NodeIO
       routeId: NodeIO
       fileAttachment: NodeIO
+      audioAttachment: NodeIO
       output: NodeIO
     }
     parameters: {
@@ -308,6 +309,7 @@ function create(agent: Agent) {
       { type: "string[]", direction: "input", title: "Quick Replies", name: "quickReplies" },
       { type: "string", direction: "input", title: "Route ID", name: "routeId" },
       { type: "file", direction: "input", title: "File Attachment", name: "fileAttachment" },
+      { type: "audio", direction: "input", title: "Audio Attachment", name: "audioAttachment" },
       { type: "string", direction: "output", title: "Output", name: "output" },
     ],
     message,
@@ -337,6 +339,7 @@ async function execute(worker: MessageWorker) {
   const quickReplies = worker.fields.quickReplies?.value as string[] || worker.parameters.defaultQuickReplies || []
   const routeId = worker.fields.routeId?.value as string || worker.parameters.defaultRouteId || ""
   const fileAttachment = worker.fields.fileAttachment?.value || null
+  const audioAttachment = worker.fields.audioAttachment?.value || null
   
   // Log all field values with detailed file attachment info
   console.log(`${logPrefix} - Field Values:`, {
@@ -350,6 +353,11 @@ async function execute(worker: MessageWorker) {
       isUrl: typeof fileAttachment === 'string' ? isUrl(fileAttachment) : false,
       hasFilename: fileAttachment?.filename,
       hasBuffer: !!fileAttachment?.buffer
+    } : 'NOT SET',
+    audioAttachment: audioAttachment ? {
+      type: typeof audioAttachment,
+      hasAudio: !!audioAttachment?.audio,
+      ext: audioAttachment?.ext
     } : 'NOT SET'
   })
   
@@ -376,6 +384,84 @@ async function execute(worker: MessageWorker) {
   try {
     // Extract media URLs and process content (shared logic)
     const { mediaUrls, processedContent } = extractMediaUrls(content)
+    
+    // Handle audio attachment if provided
+    let audioAttachmentUrl: string | null = null
+    if (audioAttachment) {
+      console.log(`${logPrefix} - Processing audio attachment:`, typeof audioAttachment, audioAttachment)
+      
+      // Audio attachment format: { audio: string (base64), ext: string }
+      if (audioAttachment && typeof audioAttachment === 'object' && audioAttachment.audio) {
+        // Convert base64 audio to blob and upload
+        try {
+          const binaryString = atob(audioAttachment.audio)
+          const bytes = new Uint8Array(binaryString.length)
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i)
+          }
+          const audioExt = audioAttachment.ext || 'mp3'
+          // Set correct mime type for Telerivet compatibility
+          let mimeType = `audio/${audioExt}`
+          if (audioExt === 'ogg') {
+            mimeType = 'audio/ogg; codecs=opus' // Telerivet requires codecs parameter for OGG
+          } else if (audioExt === 'mp3' || audioExt === 'mpeg') {
+            mimeType = 'audio/mpeg' // Use audio/mpeg instead of audio/mp3
+          } else if (audioExt === 'aac') {
+            mimeType = 'audio/aac'
+          } else if (audioExt === 'mp4') {
+            mimeType = 'audio/mp4'
+          } else if (audioExt === 'amr') {
+            mimeType = 'audio/amr'
+          }
+          const audioBlob = new Blob([bytes], { type: mimeType })
+          
+          // Upload audio to temporary storage
+          const { supabase } = await import('../db')
+          const tempFileName = `temp-attachments/${Date.now()}-${Math.random().toString(36).substring(7)}-audio.${audioExt}`
+          
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('documents')
+            .upload(tempFileName, audioBlob, {
+              cacheControl: '60',
+              upsert: false,
+              contentType: mimeType // Explicitly set content type for Telerivet compatibility
+            })
+          
+          if (uploadError) {
+            console.error(`${logPrefix} - Audio upload error:`, uploadError)
+          } else {
+            const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+              .from('documents')
+              .createSignedUrl(uploadData.path, 60)
+            
+            if (signedUrlError) {
+              console.error(`${logPrefix} - Signed URL creation error:`, signedUrlError)
+            } else {
+              audioAttachmentUrl = signedUrlData.signedUrl
+              console.log(`${logPrefix} - Audio attachment uploaded to temporary URL (expires in 60s)`)
+              
+              // Schedule cleanup
+              setTimeout(async () => {
+                try {
+                  await supabase.storage.from('documents').remove([uploadData.path])
+                  console.log(`Cleaned up temporary audio file: ${tempFileName}`)
+                } catch (cleanupError) {
+                  console.error('Error cleaning up temporary audio file:', cleanupError)
+                }
+              }, 65000)
+            }
+          }
+        } catch (error) {
+          console.error(`${logPrefix} - Error processing audio attachment:`, error)
+        }
+      } else if (typeof audioAttachment === 'string' && isUrl(audioAttachment)) {
+        // Audio attachment is already a URL
+        audioAttachmentUrl = audioAttachment
+        console.log(`${logPrefix} - Audio attachment is a URL string, using directly`)
+      } else {
+        console.error(`${logPrefix} - Invalid audio attachment format:`, audioAttachment)
+      }
+    }
     
     // Handle file attachment if provided
     let fileAttachmentUrl: string | null = null
@@ -409,10 +495,13 @@ async function execute(worker: MessageWorker) {
       }
     }
     
-    // Combine media URLs from markdown images and file attachment
+    // Combine media URLs from markdown images, file attachment, and audio attachment
     const allMediaUrls = [...mediaUrls]
     if (fileAttachmentUrl) {
       allMediaUrls.push(fileAttachmentUrl)
+    }
+    if (audioAttachmentUrl) {
+      allMediaUrls.push(audioAttachmentUrl)
     }
     
     // Handle <break> symbol splitting like Cloudscript
