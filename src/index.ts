@@ -80,7 +80,7 @@ app.post('/agent', async (req: Request<any, any, AgentParameters & { id: number,
 })
 
 
-app.all('/decors', async (req: Request, res: Response): Promise<void> => {
+app.post('/decors', async (req: Request, res: Response): Promise<void> => {
   try {
     let { url, headers: customHeaders, method, ...otherParams } = req.body || {}
 
