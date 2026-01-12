@@ -4,8 +4,6 @@ import { doVectorSearch } from "../search"
 
 declare global {
 
-
-
   interface VectorSearchWorker extends AIWorker {
     fields: {
       input: NodeIO
@@ -39,7 +37,7 @@ declare global {
     locale?: string
     lat?: number
     lon?: number
-    origin?: "supabase" | "exa" | "weaviate" | "jina" | "databricks" | "youtube"
+    origin?: "supabase" | "exa" | "weaviate" | "jina" | "databricks" | "youtube" | "zendesk" | "rescuenet"
   }
 }
 
@@ -55,7 +53,7 @@ function deduplicateLinks(array: VectorDocument[]): VectorDocument[] {
   return deduped
 }
 
-async function execute(worker: VectorSearchWorker, { apiKeys }: AgentParameters) {
+async function execute(worker: VectorSearchWorker, { apiKeys, team }: AgentParameters) {
   console.log("Executing vector search worker with parameters:", worker.parameters)
 
   worker.fields.output.value = []
@@ -115,6 +113,7 @@ async function execute(worker: VectorSearchWorker, { apiKeys }: AgentParameters)
       chunked: s.chunked,
       sources: s.sources,
       url: s.url,
+      team,
     }
 
     const docs = await doVectorSearch(r)

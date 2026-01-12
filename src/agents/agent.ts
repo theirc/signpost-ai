@@ -19,6 +19,7 @@ declare global {
     exa?: string
     jina?: string
     youtube?: string
+    rescuenet?: string
   }
 
   interface AgentParameters {
