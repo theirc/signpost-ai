@@ -8,7 +8,7 @@ import { supabase } from './agents/db'
 import { executeCronJobs } from './cron'
 import Exa from 'exa-js'
 
-const version = '1.0701.1430'
+const version = '1.1201.1430'
 
 const app = express()
 app.use(cors())
@@ -82,15 +82,19 @@ app.post('/agent', async (req: Request<any, any, AgentParameters & { id: number,
 
 app.all('/decors', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { url, headers: customHeaders, ...otherParams } = req.body || {}
+    let { url, headers: customHeaders, method, ...otherParams } = req.body || {}
 
     if (!url) {
       res.status(400).json({ error: 'URL is required in request body' })
       return
     }
 
+    method = method || req.method || ""
+    method = method.toUpperCase()
+
+
     const config: AxiosRequestConfig = {
-      method: req.method.toLowerCase() as any,
+      method,
       url: url,
       headers: {
         ...customHeaders,
@@ -99,7 +103,10 @@ app.all('/decors', async (req: Request, res: Response): Promise<void> => {
       timeout: 30000
     }
 
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
+    console.log("Request: ", config)
+
+
+    if (method !== 'GET' && method !== 'HEAD') {
       if (otherParams && Object.keys(otherParams).length > 0) {
         config.data = otherParams
       } else if (req.body && typeof req.body === 'object' && !req.body.url) {
@@ -119,6 +126,9 @@ app.all('/decors', async (req: Request, res: Response): Promise<void> => {
       'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
       'Content-Type': response.headers['content-type'] || 'application/json'
     })
+
+    console.log(response.data)
+
 
     res.status(response.status).json(response.data)
 
