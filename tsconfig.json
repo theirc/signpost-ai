@@ -15,6 +15,7 @@
     "skipLibCheck": true,
     "alwaysStrict": false,
     "verbatimModuleSyntax": false,
+    "sourceMap": true,
     "allowJs": true,
     "noImplicitReturns": false,
     "noEmit": true
