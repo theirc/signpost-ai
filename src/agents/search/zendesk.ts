@@ -1,4 +1,3 @@
-import { env } from "@/lib/env"
 import axios from "axios"
 import * as turndown from "turndown"
 
@@ -12,7 +11,7 @@ export async function getArticles(brand?: string, limit?: number): Promise<any[]
   limit ||= 100
 
   const headers = {
-    Authorization: "Basic " + btoa(`${env.ZENDESK_ACCOUNT}/token` + ':' + env.ZENDESK_TOKEN),
+    // Authorization: "Basic " + btoa(`${env.ZENDESK_ACCOUNT}/token` + ':' + env.ZENDESK_TOKEN),
     "Content-Type": "application/json"
   }
 
@@ -81,7 +80,7 @@ export async function getZendeskArticle(id: number, domain: string): Promise<Zen
   let zdars: ZendeskArticle
 
   const headers = {
-    Authorization: "Basic " + btoa(`${env.ZENDESK_ACCOUNT}/token` + ':' + env.ZENDESK_TOKEN),
+    // Authorization: "Basic " + btoa(`${env.ZENDESK_ACCOUNT}/token` + ':' + env.ZENDESK_TOKEN),
     "Content-Type": "application/json"
   }
 
@@ -103,7 +102,7 @@ export async function getZendeskArticles(domain: string): Promise<ZendeskArticle
   let zdars: ZendeskArticle[] = []
 
   const headers = {
-    Authorization: "Basic " + btoa(`${env.ZENDESK_ACCOUNT}/token` + ':' + env.ZENDESK_TOKEN),
+    // Authorization: "Basic " + btoa(`${env.ZENDESK_ACCOUNT}/token` + ':' + env.ZENDESK_TOKEN),
     "Content-Type": "application/json"
   }
 
@@ -134,7 +133,7 @@ export async function getZendeskArticles(domain: string): Promise<ZendeskArticle
 export async function getDomains(): Promise<string[]> {
 
   const headers = {
-    Authorization: "Basic " + btoa(`${env.ZENDESK_ACCOUNT}/token` + ':' + env.ZENDESK_TOKEN),
+    // Authorization: "Basic " + btoa(`${env.ZENDESK_ACCOUNT}/token` + ':' + env.ZENDESK_TOKEN),
     "Content-Type": "application/json"
   }
 
@@ -157,7 +156,7 @@ export async function getDomains(): Promise<string[]> {
 export async function getDomainById(id: string | number): Promise<string> {
 
   const headers = {
-    Authorization: "Basic " + btoa(`${env.ZENDESK_ACCOUNT}/token` + ':' + env.ZENDESK_TOKEN),
+    // Authorization: "Basic " + btoa(`${env.ZENDESK_ACCOUNT}/token` + ':' + env.ZENDESK_TOKEN),
     "Content-Type": "application/json"
   }
 
@@ -177,7 +176,7 @@ export async function getDomainById(id: string | number): Promise<string> {
 async function getArts(url: string, limit?: number): Promise<ZendeskArticle[]> {
 
   const headers = {
-    Authorization: "Basic " + btoa(`${env.ZENDESK_ACCOUNT}/token` + ':' + env.ZENDESK_TOKEN),
+    // Authorization: "Basic " + btoa(`${env.ZENDESK_ACCOUNT}/token` + ':' + env.ZENDESK_TOKEN),
     "Content-Type": "application/json"
   }
 
