@@ -42,6 +42,9 @@ const googleModels = [
   "gemini-1.5-flash-8b",
   "gemini-1.5-pro",
 ]
+const groqmodels = [
+  "openai/gpt-oss-safeguard-20b",
+]
 
 export const OpenAIModels = openAiModels.map(model => ({
   value: `openai/${model}`,
@@ -58,8 +61,14 @@ export const GoogleModels = googleModels.map(model => ({
   label: `Google - ${model}`
 }))
 
+export const GroqModels = groqmodels.map(model => ({
+  value: `groq/${model}`,
+  label: `Groq - ${model}`
+}))
+
 export const AllAIModels = [
   ...OpenAIModels,
   ...ClaudeModels,
   ...GoogleModels,
+  ...GroqModels
 ]

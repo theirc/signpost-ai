@@ -136,17 +136,28 @@ function splitMessageForWhatsApp(text: string, maxLength: number = MAX_MESSAGE_L
 function extractMediaUrls(content: string): { mediaUrls: string[], processedContent: string } {
   const mediaUrls: string[] = [];
   let processedContent = content;
-  const imageMatches = processedContent.match(/!\[\]\((https?:\/\/[^\s)]+)\)/g);
-  if (imageMatches) {
-    imageMatches.forEach((match: string) => {
-      const urlMatch = match.match(/!\[\]\((https?:\/\/[^\s)]+)\)/);
-      if (urlMatch) {
-        mediaUrls.push(urlMatch[1]);
-      }
-    });
-    // Remove image markdown from content
-    processedContent = processedContent.replace(/!\[\]\([^\)]+\)/g, "").trim();
+  
+  // Match all markdown image syntax: ![alt](url) or ![](url)
+  // Supports the syntax used in prompts: ![](imageurl) for WhatsApp image display
+  // This regex handles both cases and captures all image URLs
+  // Group 1: alt text (can be empty for ![](url))
+  // Group 2: the image URL
+  const imageRegex = /!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g;
+  let match;
+  
+  // Extract all image URLs (handles multiple images in the same message)
+  while ((match = imageRegex.exec(processedContent)) !== null) {
+    if (match[2]) { // match[2] is the URL (group 2)
+      mediaUrls.push(match[2]);
+    }
   }
+  
+  // Remove all image markdown from content (images are sent separately as media messages)
+  // This regex matches both ![](url) and ![alt](url) formats
+  processedContent = processedContent.replace(/!\[([^\]]*)\]\([^\)]+\)/g, "").trim();
+  
+  console.log(`[Extract Media URLs] Found ${mediaUrls.length} image(s):`, mediaUrls.length > 0 ? mediaUrls.map(url => url.substring(0, 50) + '...') : 'none');
+  
   return { mediaUrls, processedContent };
 }
 
@@ -162,6 +173,11 @@ async function sendTelerivetMessage(
 ): Promise<any> {
   const logPrefix = `[Send Message Worker (${worker.id})]`
   
+  // Telerivet API only supports one media URL per message
+  // If multiple URLs are provided, we'll send them separately (handled by caller)
+  // This function should only receive 0 or 1 media URL
+  const mediaUrl = (mediaUrls && mediaUrls.length > 0) ? mediaUrls[0] : null
+  
   // Prepare the message payload according to Telerivet API spec
   const messagePayload: any = {
     content: content,
@@ -172,9 +188,10 @@ async function sendTelerivetMessage(
   // Add optional fields if provided
   if (routeId) messagePayload.route_id = routeId
   
-  // Add media URLs if provided
-  if (mediaUrls && mediaUrls.length > 0) {
-    messagePayload.media_urls = mediaUrls;
+  // Add single media URL if provided (Telerivet only supports one per message)
+  if (mediaUrl) {
+    messagePayload.media_urls = [mediaUrl];
+    console.log(`${logPrefix} - Sending media URL: ${mediaUrl.substring(0, 50)}...`)
   }
   
   // Add quick replies for WhatsApp if provided
@@ -361,9 +378,16 @@ async function execute(worker: MessageWorker) {
     } : 'NOT SET'
   })
   
-  if (!content || !toNumber) {
-    worker.fields.output.value = "Error: Content and to_number are required"
-    console.error(`${logPrefix} - Validation failed: content=${!!content}, toNumber=${!!toNumber}`)
+  // Validate: need either content OR audioAttachment, and always need toNumber
+  if (!toNumber) {
+    worker.fields.output.value = "Error: to_number is required"
+    console.error(`${logPrefix} - Validation failed: toNumber=${!!toNumber}`)
+    return
+  }
+  
+  if (!content && !audioAttachment && !fileAttachment) {
+    worker.fields.output.value = "Error: Content, audio attachment, or file attachment is required"
+    console.error(`${logPrefix} - Validation failed: no content, audio, or file attachment provided`)
     return
   }
 
@@ -520,13 +544,17 @@ async function execute(worker: MessageWorker) {
           
           // Send media first if this is the first part and we have media
           if (i === 0 && mediaUrlsForPart.length > 0) {
+            console.log(`${logPrefix} - Sending ${mediaUrlsForPart.length} media file(s) before first message part`)
             for (let imgIndex = 0; imgIndex < mediaUrlsForPart.length; imgIndex++) {
-              await sendTelerivetMessage(worker, toNumber, "", routeId, [], [mediaUrlsForPart[imgIndex]], isBrowser);
+              const mediaUrl = mediaUrlsForPart[imgIndex];
+              console.log(`${logPrefix} - Sending media ${imgIndex + 1}/${mediaUrlsForPart.length}: ${mediaUrl.substring(0, 50)}...`)
+              await sendTelerivetMessage(worker, toNumber, "", routeId, [], [mediaUrl], isBrowser);
               // Small delay between images like Cloudscript
               if (imgIndex < mediaUrlsForPart.length - 1) {
                 await new Promise(resolve => setTimeout(resolve, 500));
               }
             }
+            console.log(`${logPrefix} - All ${mediaUrlsForPart.length} media file(s) sent before message parts`)
           }
           
                      // Send the text content (without media since we sent it separately)
@@ -546,14 +574,18 @@ async function execute(worker: MessageWorker) {
     
     // Single message - handle like Cloudscript: media first, then text with quick replies
     if (allMediaUrls.length > 0) {
-      // Send images first
+      console.log(`${logPrefix} - Sending ${allMediaUrls.length} media file(s) as separate messages`)
+      // Send each media URL as a separate message (Telerivet only supports one per message)
       for (let imgIndex = 0; imgIndex < allMediaUrls.length; imgIndex++) {
-        await sendTelerivetMessage(worker, toNumber, "", routeId, [], [allMediaUrls[imgIndex]], isBrowser);
-        // Small delay between images
+        const mediaUrl = allMediaUrls[imgIndex];
+        console.log(`${logPrefix} - Sending media ${imgIndex + 1}/${allMediaUrls.length}: ${mediaUrl.substring(0, 50)}...`)
+        await sendTelerivetMessage(worker, toNumber, "", routeId, [], [mediaUrl], isBrowser);
+        // Small delay between images to avoid rate limiting
         if (imgIndex < allMediaUrls.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
+      console.log(`${logPrefix} - All ${allMediaUrls.length} media file(s) sent successfully`)
     }
     
          // Then send text content with quick replies - split if too long
@@ -599,4 +631,3 @@ export const message: WorkerRegistryItem = {
     return message
   },
 }
-

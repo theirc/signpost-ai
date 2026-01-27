@@ -1,6 +1,7 @@
 import { ulid } from "ulid"
 import { loadAgent } from "./agentfactory"
 import { ZodObject } from "zod"
+import cloneDeep from "lodash/cloneDeep"
 
 export const inputOutputTypes = {
   string: "Text",
@@ -456,6 +457,27 @@ export function buildWorker(w: WorkerConfig) {
       console.log("Worker Referenced Agent Loaded: ", worker.referencedAgent)
     },
 
+    clone(a: any) {
+      const agent: Agent = a
+      const nworker = worker.registry.create(agent)
+      console.log(worker.id, nworker.id, worker.id == nworker.id)
+
+      nworker.config.x = worker.config.x + 200
+      nworker.config.y = worker.config.y + 200
+
+      const clonedHandles = cloneDeep(worker.getUserHandlers())
+
+      for (const h of clonedHandles) {
+        delete h.id
+      }
+      nworker.addHandlers(clonedHandles)
+
+      const cloneParameters = cloneDeep(worker.parameters)
+      nworker.parameters = cloneParameters
+      nworker.config.parameters = cloneParameters
+
+      return nworker
+    }
 
   }
 

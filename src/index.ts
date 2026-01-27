@@ -8,7 +8,7 @@ import { supabase } from './agents/db'
 import { executeCronJobs } from './cron'
 import Exa from 'exa-js'
 
-const version = '1.1201.1937'
+const version = '2.2701.1541'
 
 const app = express()
 app.use(cors())

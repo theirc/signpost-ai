@@ -19,10 +19,11 @@ async function execute(worker: AgentWorker, p: AgentParameters) {
 
   const locp = {
     ...p,
-    debug: false,
+    // debug: false,
     agent,
     input: {}
   }
+
   console.log("Agent Worker Execute Parameters: ", locp)
 
   for (const h of worker.handlersArray) {

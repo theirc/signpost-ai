@@ -1,7 +1,7 @@
 import { searchWeaviate } from "./weaviate"
 import { searchExa } from "./exa"
 import { searchJina } from "./jina"
-import { searchSupabase } from "./supa"
+import { searchServices, searchSupabase, searchSupabaseDomains } from "./supa"
 import { databricks } from "./databricks"
 import { searchYouTube } from "./youtube"
 import { zendesk } from "./zendesk"
@@ -9,7 +9,7 @@ import { rescue } from "./rescue"
 
 declare global {
 
-  type VectorSearchEngines = "weaviate" | "supabase" | "exa" | "jina" | "databricks" | "youtube" | "zendesk" | "rescuenet"
+  type VectorSearchEngines = "weaviate" | "supabase" | "supabased" | "exa" | "jina" | "databricks" | "youtube" | "zendesk" | "rescuenet" | "services"
 
   interface VectorSerach {
     type: VectorSearchEngines
@@ -39,6 +39,8 @@ export async function doVectorSearch(p: VectorSerach) {
   if (p.type == "exa") return searchExa(p)
   if (p.type == "jina") return searchJina(p)
   if (p.type == "supabase") return searchSupabase(p)
+  if (p.type == "supabased") return searchSupabaseDomains(p)
+  if (p.type == "services") return searchServices(p)
   if (p.type == "databricks") return databricks.search(p)
   if (p.type == "youtube") return searchYouTube(p)
   if (p.type == "zendesk") return zendesk.search(p)
