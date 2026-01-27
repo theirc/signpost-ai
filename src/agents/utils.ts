@@ -7,9 +7,16 @@ import { createGroq } from '@ai-sdk/groq'
 export function createModel(apiKeys: APIKeys, modelName: string) {
   modelName = modelName || ""
 
-  const selModel = modelName.split("/")
-  const provider: ModelProviders = (selModel[0] as ModelProviders)
-  const modelID = selModel[1]
+  // const selModel = modelName.split("/")
+  // const provider: ModelProviders = (selModel[0] as ModelProviders)
+  // const modelID = selModel[1]
+
+  const [provider, ...modelarray] = modelName.split("/")
+  const modelID = modelarray.join("/")
+
+  // const selModel = modelName.split("/")
+  // const provider: ModelProviders = (selModel[0] as ModelProviders)
+  // const modelID = selModel[1]
 
   if (!provider || !modelID) return null
 
@@ -24,7 +31,10 @@ export function createModel(apiKeys: APIKeys, modelName: string) {
   if (provider === "openai") {
     model = createOpenAI({ apiKey })(modelID)
   } else if (provider === "anthropic") {
-    model = createAnthropic({ apiKey })(modelID)
+    model = createAnthropic({
+      apiKey,
+      headers: { 'anthropic-dangerous-direct-browser-access': 'true' }
+    })(modelID)
   } else if (provider === "google") {
     model = createGoogleGenerativeAI({ apiKey })(modelID)
   } else if (provider === "groq") {

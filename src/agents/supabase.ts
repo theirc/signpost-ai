@@ -318,6 +318,35 @@ export type Database = {
           },
         ]
       }
+      domains: {
+        Row: {
+          created_at: string
+          id: number
+          name: string | null
+          team: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          name?: string | null
+          team?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          name?: string | null
+          team?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domains_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       eval_configs: {
         Row: {
           config: Json
@@ -966,21 +995,27 @@ export type Database = {
           description: string | null
           id: string
           name: string | null
+          owner: string | null
           status: string | null
+          technical_owner: string | null
         }
         Insert: {
           created_at?: string
           description?: string | null
           id?: string
           name?: string | null
+          owner?: string | null
           status?: string | null
+          technical_owner?: string | null
         }
         Update: {
           created_at?: string
           description?: string | null
           id?: string
           name?: string | null
+          owner?: string | null
           status?: string | null
+          technical_owner?: string | null
         }
         Relationships: []
       }
@@ -1095,6 +1130,7 @@ export type Database = {
           content: string | null
           created_at: string
           error: string | null
+          external_id: string | null
           filename: string | null
           id: number
           isChunk: boolean | null
@@ -1106,6 +1142,7 @@ export type Database = {
           status: number | null
           team: string | null
           tokens: number | null
+          updated_at: string | null
           url: string | null
           vector: string | null
         }
@@ -1113,6 +1150,7 @@ export type Database = {
           content?: string | null
           created_at?: string
           error?: string | null
+          external_id?: string | null
           filename?: string | null
           id?: number
           isChunk?: boolean | null
@@ -1124,6 +1162,7 @@ export type Database = {
           status?: number | null
           team?: string | null
           tokens?: number | null
+          updated_at?: string | null
           url?: string | null
           vector?: string | null
         }
@@ -1131,6 +1170,7 @@ export type Database = {
           content?: string | null
           created_at?: string
           error?: string | null
+          external_id?: string | null
           filename?: string | null
           id?: number
           isChunk?: boolean | null
@@ -1142,10 +1182,18 @@ export type Database = {
           status?: number | null
           team?: string | null
           tokens?: number | null
+          updated_at?: string | null
           url?: string | null
           vector?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "vectors_reference_fkey"
+            columns: ["reference"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "vectors_team_fkey"
             columns: ["team"]
@@ -1175,6 +1223,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      services_grouped: {
+        Row: {
+          count: number | null
+          domain: string | null
+        }
+        Relationships: []
       }
       users_with_teams: {
         Row: {
@@ -1213,6 +1268,45 @@ export type Database = {
       }
     }
     Functions: {
+      cleanup_old_chat_history_test: {
+        Args: never
+        Returns: {
+          deleted_count: number
+          oldest_remaining_date: string
+        }[]
+      }
+      cleanup_old_logs: {
+        Args: never
+        Returns: {
+          deleted_count: number
+          more_to_delete: boolean
+          oldest_remaining_date: string
+        }[]
+      }
+      cleanup_old_logs_aggressive: {
+        Args: never
+        Returns: {
+          batches_run: number
+          more_to_delete: boolean
+          total_deleted: number
+        }[]
+      }
+      cleanup_old_logs_aggressive_2: {
+        Args: never
+        Returns: {
+          batches_run: number
+          more_to_delete: boolean
+          total_deleted: number
+        }[]
+      }
+      cleanup_old_logs_aggressive_3: {
+        Args: never
+        Returns: {
+          batches_run: number
+          more_to_delete: boolean
+          total_deleted: number
+        }[]
+      }
       match_collections: {
         Args: {
           match_count: number
@@ -1257,6 +1351,76 @@ export type Database = {
           content: string
           created_at: string
           distance: number
+          filename: string
+          id: number
+          ischunk: boolean
+          locale: string
+          location: unknown
+          name: string
+          reference: number
+          size: number
+          status: number
+          team: string
+          url: string
+        }[]
+      }
+      match_vectors_domains: {
+        Args: {
+          bbox_max_lat?: number
+          bbox_max_lon?: number
+          bbox_min_lat?: number
+          bbox_min_lon?: number
+          filter_domains?: number[]
+          filter_ids?: number[]
+          filter_is_chunk?: boolean
+          filter_locale?: string
+          filter_status?: number
+          match_count?: number
+          max_distance_meters?: number
+          origin_lat?: number
+          origin_lon?: number
+          query_embedding: string
+          similarity?: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          distance: number
+          filename: string
+          id: number
+          ischunk: boolean
+          locale: string
+          location: unknown
+          name: string
+          reference: number
+          size: number
+          status: number
+          team: string
+          url: string
+        }[]
+      }
+      match_vectors_services: {
+        Args: {
+          bbox_max_lat?: number
+          bbox_max_lon?: number
+          bbox_min_lat?: number
+          bbox_min_lon?: number
+          filter_ids?: number[]
+          filter_is_chunk?: boolean
+          filter_locale?: string
+          filter_status?: number
+          match_count?: number
+          max_distance_meters?: number
+          origin_lat?: number
+          origin_lon?: number
+          query_embedding: string
+          similarity?: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          distance: number
+          external_id: string
           filename: string
           id: number
           ischunk: boolean

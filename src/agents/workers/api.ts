@@ -189,26 +189,23 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
     let apiResponseStatusText: string | undefined
 
     if (isBrowser) {
-      // FRONTEND: Use the proxy
-      console.log(`${logPrefix} [Browser] - Using proxy /api/axiosFetch for: ${endpoint}`)
+      // FRONTEND: Use the proxy (using fetch like Telerivet hooks for better performance)
       const proxyPayload = { url: endpoint, method, headers, params, data, timeout }
-      console.log(`${logPrefix} [Browser] - Proxy payload:`, proxyPayload)
-      const proxyResponse = await axios({
+      const proxyResponse = await fetch('/api/axiosFetch', {
         method: 'POST',
-        url: '/api/axiosFetch',
-        data: proxyPayload
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(proxyPayload)
       })
-      console.log(`${logPrefix} [Browser] - Proxy response status: ${proxyResponse.status}`)
 
-      if (proxyResponse.status !== 200) {
-        console.error(`${logPrefix} [Browser] - Proxy service request failed! Status: ${proxyResponse.status}`)
-        throw new Error(`Proxy service request failed: ${proxyResponse.status} ${proxyResponse.statusText}`)
+      if (!proxyResponse.ok) {
+        const errorText = await proxyResponse.text()
+        throw new Error(`Proxy service failed: ${proxyResponse.status} - ${errorText}`)
       }
-      // Assuming proxy returns { status, statusText, data, error? }
-      const proxyResult = proxyResponse.data
-      console.log(`${logPrefix} [Browser] - Proxy result:`, proxyResult)
+
+      const proxyResult = await proxyResponse.json()
       if (proxyResult?.error) {
-        console.error(`${logPrefix} [Browser] - Error received from proxy: ${proxyResult.error}`)
         throw new Error(`Proxy error: ${proxyResult.error} ${proxyResult.message || ''}`)
       }
       apiResponseData = proxyResult?.data
