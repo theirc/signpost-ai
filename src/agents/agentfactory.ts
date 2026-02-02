@@ -170,7 +170,8 @@ export function createAgent(config: AgentConfig) {
         w.executed = false
       }
 
-      const hasUid = p.uid && z.string().uuid().safeParse(p.uid).success
+      const hasUid = !!p.uid
+      // const hasUid = p.uid && z.string().uuid().safeParse(p.uid).success
 
       if (hasUid) {
         const dbState = await supabase.from("states").select("*").eq("id", p.uid).single()
