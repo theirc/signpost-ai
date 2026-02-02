@@ -7,7 +7,6 @@ import { ulid } from "ulid"
 
 const MAX_QUICK_REPLY_LENGTH = 20
 const MAX_QUICK_REPLIES_PER_MESSAGE = 3
-//agent 450
 
 export async function telerivetHook(r: TelerivetHookRequest, agent: number) {
 
@@ -219,40 +218,6 @@ async function sendMessage(content: string, to_number: string, projectId: string
 }
 
 
-// async function execute(worker: MessageWorker) {
-
-//   const quickReplies = worker.fields.quickReplies?.value as string[] || worker.parameters.defaultQuickReplies || []
-
-//   // Then send text content with quick replies - split if too long
-//   const cleanText = cleanMessage(processedContent)
-//   const textMessages = splitMessageForWhatsApp(cleanText)
-
-//   let lastApiResponse: any = null
-
-//   for (let i = 0; i < textMessages.length; i++) {
-//     const messageText = textMessages[i]
-//     const quickRepliesForMessage = (i === textMessages.length - 1) ? quickReplies : []
-
-//     const apiResponse = await sendTelerivetMessage(worker, toNumber, messageText, routeId, quickRepliesForMessage, [], isBrowser)
-//     if (apiResponse) lastApiResponse = apiResponse
-
-//     // Add delay between split messages if not the last one
-//     if (i < textMessages.length - 1) {
-//       await new Promise(resolve => setTimeout(resolve, 500))
-//     }
-//   }
-
-//   // Set success output with actual API results
-//   if (lastApiResponse) {
-//     worker.fields.output.value = `Message sent successfully to ${toNumber}. API Response: ${JSON.stringify(lastApiResponse)}`
-//   } else {
-//     worker.fields.output.value = `Message sent successfully to ${toNumber}`
-//   }
-
-
-
-
-
 function encode(text: string): string {
   const password = env.TELERIVET_SALT
   const key = crypto.createHash('md5').update(password).digest()
@@ -274,9 +239,8 @@ interface TelerivetHookRequest {
   content?: string // "hola" - Con un audio esto viene vacio
   media?: TelerivetMedia[]
   time_created: string // "1769712063"
-  from_number: string // "5492235212007"
+  from_number: string // "5492235...."
 }
-
 
 
 interface TelerivetHookRequest {
@@ -296,7 +260,7 @@ interface TelerivetHookRequest {
   starred: string // "0"
   simulated: string // "0"
   track_clicks: string // "0"
-  from_number_e164: string // "+5492235212007"
+  from_number_e164: string // "+5492235..."
   external_id: string // "wamid.HBgNNTQ5MjIzNTIxMjAwNxUCABIYFjNFQjBBRTVBMjI4RTQyMjY4QUYwQjgA"
   project_id: string // "PJ907db900079b5d05"
   contact: TelerivetContact
@@ -308,7 +272,7 @@ interface TelerivetHookRequest {
 }
 interface TelerivetContact {
   id: string// "CTf792ef40a82984dc",
-  phone_number: string// "5492235212007",
+  phone_number: string// "5492235...",
   name: string // "Guillermo",
   time_created: string // "1769710712",
   time_updated: string // "1769712063",
