@@ -27,7 +27,9 @@ async function execute(worker: CombineWorker) {
     })
     .map(([_, field]) => field)
 
-  if (worker.parameters.mode === "nonempty") {
+  const param = worker.parameters.mode || "nonempty"
+
+  if (param === "nonempty") {
     // Find the first non-empty input
     for (const input of inputFields) {
       if (Array.isArray(input.value)) {
@@ -45,7 +47,7 @@ async function execute(worker: CombineWorker) {
     worker.fields.output.value = inputFields[inputFields.length - 1]?.value || null
   }
 
-  if (worker.parameters.mode === "concat") {
+  if (param === "concat") {
     if (typeof inputFields[0]?.value === "string") {
       worker.fields.output.value = inputFields.map(input => input.value || "").join("").trim()
     }
