@@ -9,7 +9,7 @@ import { executeCronJobs } from './cron'
 import Exa from 'exa-js'
 import { telerivetHook } from './integrations/telerivet'
 
-const version = '2.0202.1505'
+const version = '2.0206.1152'
 
 const app = express()
 app.use(cors())
@@ -209,9 +209,11 @@ app.post('/integrations/:provider/:agent', async (req, res) => {
 
   if (!provider || !agent || !body) return
 
+  const useDebug = !!req.query.debug
+
   try {
     if (provider === "telerivet") {
-      await telerivetHook(body, Number(agent))
+      await telerivetHook(body, Number(agent), useDebug)
     }
   } catch (error) {
     console.log(`Error Executing Telerivet Integration ${error}`)

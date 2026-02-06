@@ -8,59 +8,74 @@ import { ulid } from "ulid"
 const MAX_QUICK_REPLY_LENGTH = 20
 const MAX_QUICK_REPLIES_PER_MESSAGE = 3
 
-export async function telerivetHook(r: TelerivetHookRequest, agent: number) {
+export async function telerivetHook(r: TelerivetHookRequest, agent: number, debug = false) {
 
-  if (!agent || !r) {
-    console.log("Telerivet Error: No agent or request provided.")
-    return
+  let error: string
+
+  try {
+    error = await internalTelerivetHook(r, agent)
+  } catch (error) {
+    error = `Catch Error: ${error || "Unknown error"}`
   }
 
-  if (!r.media && !r.content) {
-    console.log("Telerivet Error: No media or content provided.")
-    return
+  console.log(`Telerivet: ${error ? error : "No incidents recorded."}`)
+
+  if (debug && error) {
+    try {
+      tryToNotifiyError(error, r, agent)
+    } catch (error) {
+      console.error("Error sending error")
+    }
   }
 
-  if (!r.from_number) {
-    console.log("Telerivet Error: No from number provided.")
-    return
-  }
+}
+
+async function tryToNotifiyError(error: string, r: TelerivetHookRequest, agent: number) {
 
   const dbAgent = await supabase.from("agents").select("*").eq("id", agent).single()
-  if (!dbAgent.data || dbAgent.error) {
-    console.log("Telerivet Error: No agent found.")
-    return
-  }
-
   const dbTeam = await supabase.from("teams").select("*").eq("id", dbAgent.data.team_id).single()
-  if (!dbTeam.data || dbTeam.error) {
-    console.log("Telerivet Error: No team found.")
-    return
-  }
   const team = dbTeam.data.id
-
-  const a = await agents.loadAgent(agent, team)
-
-  if (!a) {
-    console.log("Telerivet Error: No agent by team found.")
-    return
-  }
+  const ak = await supabase.from("api_keys").select("*").eq("team_id", team)
 
   let apiKeys: APIKeys = {}
-  const ak = await supabase.from("api_keys").select("*").eq("team_id", team)
-  if (!ak.data || ak.error) {
-    console.error('Telerivet Error: Error fetching api keys:')
-    return
-  }
 
   apiKeys = ak.data?.reduce<Record<string, string>>((acc, key) => {
     if (key.type && key.key) acc[key.type] = key.key
     return acc
   }, {}) || {}
 
-  if (!apiKeys.telerivet) {
-    console.log("Telerivet Error: No telerivet api key found.")
-    return
-  }
+  await sendMessage(error, r.from_number, r.project_id, apiKeys.telerivet, [])
+
+}
+
+
+async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
+
+  if (!agent || !r) return "No agent or request provided."
+  if (!r.media && !r.content) return "No media or content provided."
+  if (!r.from_number) return "No from number provided."
+
+  const dbAgent = await supabase.from("agents").select("*").eq("id", agent).single()
+  if (!dbAgent.data || dbAgent.error) return "No agent by id found."
+
+  const dbTeam = await supabase.from("teams").select("*").eq("id", dbAgent.data.team_id).single()
+  if (!dbTeam.data || dbTeam.error) return "No team found."
+  const team = dbTeam.data.id
+
+  const a = await agents.loadAgent(agent, team)
+
+  if (!a) return "No agent found."
+
+  let apiKeys: APIKeys = {}
+  const ak = await supabase.from("api_keys").select("*").eq("team_id", team)
+  if (!ak.data || ak.error) return "No api keys found."
+
+  apiKeys = ak.data?.reduce<Record<string, string>>((acc, key) => {
+    if (key.type && key.key) acc[key.type] = key.key
+    return acc
+  }, {}) || {}
+
+  if (!apiKeys.telerivet) return "No telerivet api key found."
 
   //----- Real processing starts here ------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -103,17 +118,11 @@ export async function telerivetHook(r: TelerivetHookRequest, agent: number) {
 
   await a.execute(p)
 
-  if (p.error) {
-    console.log(`Telerivet Error: Agent Error: ${p.error}  `)
-    return
-  }
+  if (p.error) return `Agent Error: ${p.error}`
 
   let { response, audio } = p.output || {}
 
-  if (!response && !audio) {
-    console.log("Telerivet Error: No output found.")
-    return
-  }
+  if (!response && !audio) return "No output found"
 
   const media_urls: string[] = []
 
