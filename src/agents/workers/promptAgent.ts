@@ -74,22 +74,18 @@ async function invokeModel(params: InvokeModelParams): Promise<InvokeModelResult
   agent.on("agent_handoff", (ctx, agent) => {
     const message = `LLM Agent handoff to Agent with description '${agent.handoffDescription}'`
     logAgent.log({ type: "handoff", message, })
-    console.log(message)
   })
   agent.on("agent_tool_start", (ctx, b) => {
     const message = `LLM Agent Tool '${b.name}' Start`
     logAgent.log({ type: "tool_start", message, })
-    console.log(message, b, ctx)
   })
   agent.on("agent_tool_end", (ctx, b) => {
     const message = `LLM Agent Tool '${b.name}' End`
     logAgent.log({ type: "tool_end", message, })
     if (ctx['searchResults']) searchContext += `\n\nSearch Results for tool ${b.name}:\n${ctx['searchResults']}`
-    console.log(message, b, ctx)
   })
 
   const result = await run(agent, history)
-  console.log("Agent State:", result.state)
 
   let inputTokens = 0
   let outputTokens = 0
@@ -187,7 +183,6 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
   } catch (error) {
     console.error("Primary model failed:", error)
     if (fallbackModelId) {
-      console.log("Attempting fallback model:", fallbackModelId)
       try {
         result = await invokeModel({ ...invokeParams, modelId: fallbackModelId })
       } catch (fallbackError) {
@@ -204,13 +199,10 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
   worker.inputTokens = result.inputTokens
   worker.outputTokens = result.outputTokens
 
-  console.log("Result History:", result.history)
-
   const historyWorkers = worker.getConnectedWokersToHandle(worker.fields.history, p).filter((w) => w.config.type === "chatHistory") as any as ChatHistoryWorker[]
   const hw = historyWorkers[0]
 
   if (hw) {
-    console.log("History Worker", hw)
     await hw.saveHistory(hw, p, result.history, result.searchContext, worker.inputTokens, worker.outputTokens)
   }
 

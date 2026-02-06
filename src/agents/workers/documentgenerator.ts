@@ -56,17 +56,17 @@ function toSnakeCaseBase(name: string): string {
 
 function generateCsv(content: string): Uint8Array {
   const lines = content.split('\n').filter(line => line.trim())
-  
+
   if (lines.length === 0) {
     return new TextEncoder().encode('')
   }
-  
+
   const csvLines: string[] = []
-  
+
   for (const line of lines) {
     const trimmedLine = line.trim()
     if (!trimmedLine) continue
-    
+
     if (trimmedLine.startsWith('|') && trimmedLine.endsWith('|')) {
       const cells = trimmedLine
         .slice(1, -1)
@@ -96,7 +96,7 @@ function generateCsv(content: string): Uint8Array {
       csvLines.push(`"${trimmedLine}"`)
     }
   }
-  
+
   const csvContent = csvLines.join('\n')
   return new TextEncoder().encode(csvContent)
 }
@@ -230,13 +230,13 @@ async function generatePdf(content: string): Promise<Uint8Array> {
 
     const imgData = canvas.toDataURL('image/png')
     const pdf = new jsPDF('p', 'mm', 'a4')
-    
+
     const imgWidth = 160
     const pageHeight = 297
     const topMargin = 25
     const bottomMargin = 30
     const usablePageHeight = pageHeight - topMargin - bottomMargin
-    
+
     const imgHeight = (canvas.height * imgWidth) / canvas.width
     let heightLeft = imgHeight
 
@@ -246,14 +246,14 @@ async function generatePdf(content: string): Promise<Uint8Array> {
       pdf.addImage(imgData, 'PNG', 25, verticalOffset, imgWidth, imgHeight)
     } else {
       const totalPages = Math.ceil(imgHeight / usablePageHeight)
-      
+
       const firstPageHeight = Math.min(usablePageHeight, imgHeight)
-      
+
       const firstPageCanvas = document.createElement('canvas')
       const firstCtx = firstPageCanvas.getContext('2d')
       firstPageCanvas.width = canvas.width
       firstPageCanvas.height = firstPageHeight * (canvas.width / imgWidth)
-      
+
       firstCtx?.drawImage(
         canvas,
         0, 0,
@@ -261,20 +261,20 @@ async function generatePdf(content: string): Promise<Uint8Array> {
         0, 0,
         firstPageCanvas.width, firstPageCanvas.height
       )
-      
+
       const firstPageImgData = firstPageCanvas.toDataURL('image/png')
       pdf.addImage(firstPageImgData, 'PNG', 25, topMargin, imgWidth, firstPageHeight)
-      
+
       if (totalPages > 1) {
         for (let pageNum = 1; pageNum < totalPages; pageNum++) {
           const pageStartY = pageNum * usablePageHeight
           const pageHeight = Math.min(usablePageHeight, imgHeight - pageStartY)
-          
+
           const pageCanvas = document.createElement('canvas')
           const pageCtx = pageCanvas.getContext('2d')
           pageCanvas.width = canvas.width
           pageCanvas.height = pageHeight * (canvas.width / imgWidth)
-          
+
           pageCtx?.drawImage(
             canvas,
             0, pageStartY * (canvas.width / imgWidth),
@@ -282,9 +282,9 @@ async function generatePdf(content: string): Promise<Uint8Array> {
             0, 0,
             pageCanvas.width, pageCanvas.height
           )
-          
+
           const pageImgData = pageCanvas.toDataURL('image/png')
-          
+
           pdf.addPage()
           pdf.addImage(pageImgData, 'PNG', 25, topMargin, imgWidth, pageHeight)
         }
@@ -301,21 +301,21 @@ async function generatePdf(content: string): Promise<Uint8Array> {
 async function generateDocx(content: string): Promise<Uint8Array> {
   const lines = content.split('\n')
   const children: any[] = []
-  
+
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
     const line = lines[lineIndex]
     const trimmedLine = line.trim()
-    
+
     if (!trimmedLine) {
       children.push(new Paragraph({}))
       continue
     }
-    
+
     const headingMatch = /^(#{1,6})\s+(.+)$/.exec(trimmedLine)
     if (headingMatch) {
       const level = headingMatch[1].length
       const text = headingMatch[2]
-      
+
       let headingLevel: typeof HeadingLevel[keyof typeof HeadingLevel]
       switch (level) {
         case 1: headingLevel = HeadingLevel.HEADING_1; break
@@ -326,7 +326,7 @@ async function generateDocx(content: string): Promise<Uint8Array> {
         case 6: headingLevel = HeadingLevel.HEADING_6; break
         default: headingLevel = HeadingLevel.HEADING_1
       }
-      
+
       children.push(new Paragraph({
         children: [new TextRun({ text: text, bold: true, size: 24 })],
         heading: headingLevel,
@@ -334,11 +334,11 @@ async function generateDocx(content: string): Promise<Uint8Array> {
       }))
       continue
     }
-    
+
     if (/^[-*+]\s+(.+)$/.test(trimmedLine)) {
       const text = trimmedLine.replace(/^[-*+]\s+/, '')
       const textRuns = parseMarkdownText(text)
-      
+
       children.push(new Paragraph({
         children: textRuns,
         bullet: { level: 0 },
@@ -346,12 +346,12 @@ async function generateDocx(content: string): Promise<Uint8Array> {
       }))
       continue
     }
-    
+
     if (/^\d+\.\s+(.+)$/.test(trimmedLine)) {
       const text = trimmedLine.replace(/^\d+\.\s+/, '')
-      
+
       const textRuns = parseMarkdownText(text)
-      
+
       children.push(new Paragraph({
         children: textRuns,
         numbering: { reference: 'default-numbering', level: 0 },
@@ -359,10 +359,10 @@ async function generateDocx(content: string): Promise<Uint8Array> {
       }))
       continue
     }
-    
+
     if (/^>\s+(.+)$/.test(trimmedLine)) {
       const text = trimmedLine.replace(/^>\s+/, '')
-      
+
       children.push(new Paragraph({
         children: [new TextRun({ text: text, size: 20, italics: true })],
         spacing: { before: 200, after: 200 },
@@ -371,23 +371,23 @@ async function generateDocx(content: string): Promise<Uint8Array> {
       }))
       continue
     }
-    
+
     if (trimmedLine.startsWith('```')) {
       continue
     }
-    
+
     if (trimmedLine.startsWith('```')) {
       continue
     }
-    
+
     const textRuns = parseMarkdownText(trimmedLine)
-    
+
     children.push(new Paragraph({
       children: textRuns,
       spacing: { before: 100, after: 100 }
     }))
   }
-  
+
   const doc = new Document({
     sections: [{
       properties: {
@@ -403,7 +403,7 @@ async function generateDocx(content: string): Promise<Uint8Array> {
       children: children
     }]
   })
-  
+
   const blob = await Packer.toBlob(doc)
   const arrayBuffer = await blob.arrayBuffer()
   return new Uint8Array(arrayBuffer)
@@ -413,21 +413,21 @@ function parseMarkdownText(text: string): TextRun[] {
   const textRuns: TextRun[] = []
   let currentText = ''
   let i = 0
-  
+
   while (i < text.length) {
     if (text.substring(i, i + 2) === '**') {
       if (currentText) {
         textRuns.push(new TextRun({ text: currentText, size: 20 }))
         currentText = ''
       }
-      
+
       i += 2
       let boldText = ''
       while (i < text.length && text.substring(i, i + 2) !== '**') {
         boldText += text[i]
         i++
       }
-      
+
       if (i < text.length && text.substring(i, i + 2) === '**') {
         textRuns.push(new TextRun({ text: boldText, bold: true, size: 20 }))
         i += 2
@@ -436,20 +436,20 @@ function parseMarkdownText(text: string): TextRun[] {
       }
       continue
     }
-    
+
     if (text[i] === '*' && (i === 0 || text[i - 1] !== '*')) {
       if (currentText) {
         textRuns.push(new TextRun({ text: currentText, size: 20 }))
         currentText = ''
       }
-      
+
       i++
       let italicText = ''
       while (i < text.length && text[i] !== '*') {
         italicText += text[i]
         i++
       }
-      
+
       if (i < text.length && text[i] === '*') {
         textRuns.push(new TextRun({ text: italicText, italics: true, size: 20 }))
         i++
@@ -458,23 +458,23 @@ function parseMarkdownText(text: string): TextRun[] {
       }
       continue
     }
-    
+
     if (text[i] === '`') {
       if (currentText) {
         textRuns.push(new TextRun({ text: currentText, size: 20 }))
         currentText = ''
       }
-      
+
       i++
       let codeText = ''
       while (i < text.length && text[i] !== '`') {
         codeText += text[i]
         i++
       }
-      
+
       if (i < text.length && text[i] === '`') {
-        textRuns.push(new TextRun({ 
-          text: codeText, 
+        textRuns.push(new TextRun({
+          text: codeText,
           font: 'Consolas',
           size: 18,
           color: '2c3e50'
@@ -485,71 +485,69 @@ function parseMarkdownText(text: string): TextRun[] {
       }
       continue
     }
-    
+
     currentText += text[i]
     i++
   }
-  
+
   if (currentText) {
     textRuns.push(new TextRun({ text: currentText, size: 20 }))
   }
-  
+
   return textRuns
 }
 
 async function uploadFileTemporarily(fileData: { buffer: Uint8Array, mimeType: string, filename: string }): Promise<string | null> {
   try {
-    const { buffer, mimeType, filename } = fileData;
-    
+    const { buffer, mimeType, filename } = fileData
+
     // Import supabase (dynamic import to handle different environments)
-    const { supabase } = await import('../db');
-    
+    const { supabase } = await import('../db')
+
     // Create a unique filename for temporary storage
-    const tempFileName = `temp-documents/${Date.now()}-${Math.random().toString(36).substring(7)}-${filename}`;
-    
+    const tempFileName = `temp-documents/${Date.now()}-${Math.random().toString(36).substring(7)}-${filename}`
+
     // Convert buffer to File/Blob for upload
-    const fileBlob = new Blob([new Uint8Array(buffer)], { type: mimeType });
-    
+    const fileBlob = new Blob([new Uint8Array(buffer)], { type: mimeType })
+
     // Upload to Supabase storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('documents')
       .upload(tempFileName, fileBlob, {
         cacheControl: '300', // Cache for 5 minutes
         upsert: false // Don't overwrite, each upload should be unique
-      });
+      })
 
     if (uploadError) {
-      console.error('Supabase upload error:', uploadError);
-      return null;
+      console.error('Supabase upload error:', uploadError)
+      return null
     }
 
     // Create signed URL that expires in 5 minutes
     const { data: signedUrlData, error: signedUrlError } = await supabase.storage
       .from('documents')
-      .createSignedUrl(uploadData.path, 300);
+      .createSignedUrl(uploadData.path, 300)
 
     if (signedUrlError) {
-      console.error('Signed URL creation error:', signedUrlError);
-      return null;
+      console.error('Signed URL creation error:', signedUrlError)
+      return null
     }
 
-    console.log(`Temporary document uploaded: ${tempFileName}, expires in 5 minutes`);
-    
+
     // Schedule cleanup after 6 minutes (1 minute buffer)
     setTimeout(async () => {
       try {
-        await supabase.storage.from('documents').remove([uploadData.path]);
-        console.log(`Cleaned up temporary document: ${tempFileName}`);
+        await supabase.storage.from('documents').remove([uploadData.path])
       } catch (cleanupError) {
-        console.error('Error cleaning up temporary document:', cleanupError);
+        console.error('Error cleaning up temporary document:', cleanupError)
       }
-    }, 360000); // 6 minutes
+    }, 360000) // 6 minutes
 
-    return signedUrlData.signedUrl;
+    return signedUrlData.signedUrl
 
   } catch (error) {
-    console.error('Error uploading document:', error);
-    return null;
+    console.error('Error uploading document:', error)
+    return null
   }
 }
 
@@ -562,7 +560,7 @@ async function generateFile(content: string, type: string): Promise<Uint8Array> 
 async function execute(worker: AIWorker) {
   const inputValue = worker.fields.input.value as string
   const docType = worker.parameters.doc || 'docx'
-  
+
   if (!inputValue) return
 
   try {
@@ -570,9 +568,9 @@ async function execute(worker: AIWorker) {
     const base = toSnakeCaseBase(chosenTitle)
     const ext = docType === 'pdf' ? 'pdf' : docType === 'csv' ? 'csv' : 'docx'
     const filename = `${base}.${ext}`
-    
+
     const buffer = await generateFile(inputValue, docType)
-    
+
     let mimeType: string
     switch (docType) {
       case 'pdf':
@@ -584,19 +582,19 @@ async function execute(worker: AIWorker) {
       default:
         mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     }
-    
+
     // Upload to temporary storage and get URL
     const fileUrl = await uploadFileTemporarily({
       buffer,
       mimeType,
       filename
     })
-    
+
     if (!fileUrl) {
       worker.fields.output.value = `Error: Failed to upload generated ${docType} file`
       return
     }
-    
+
     // Return URL string like text worker does
     worker.fields.output.value = fileUrl
   } catch (error) {

@@ -27,17 +27,12 @@ export async function getArticles(brand?: string, limit?: number): Promise<any[]
     brands.push({ subdomain: brand })
   }
 
-  console.log(brands)
 
   let count = 1
   for (const b of brands) {
     try {
       let url = `https://${b.subdomain}.zendesk.com/api/v2/help_center/articles.json?per_page=${limit}`
-      console.log(`Getting articles for brand ${b.subdomain} ${count++}/${brands.length}`)
       const rarts = await getArts(url, limit)
-
-      console.log(`${b.subdomain}: ${rarts.length} articles.`)
-
       for (const article of rarts) {
         if (article.draft) continue
 
@@ -68,7 +63,6 @@ export async function getArticles(brand?: string, limit?: number): Promise<any[]
     }
   }
 
-  console.log("Data Gathering done.")
 
   return docs.filter(doc => !!doc.body)
 
@@ -87,7 +81,6 @@ export async function getZendeskArticle(id: number, domain: string): Promise<Zen
 
   try {
     let url = `https://${domain}.zendesk.com/api/v2/help_center/articles/${id}`
-    console.log(`Getting article ${id}...`)
     const r = await axios.get(url, { headers })
     zdars = r.data?.article
   } catch (error) {
@@ -109,10 +102,7 @@ export async function getZendeskArticles(domain: string): Promise<ZendeskArticle
 
   try {
     let url = `https://${domain}.zendesk.com/api/v2/help_center/articles.json?per_page=100`
-    console.log(`Getting articles for domain ${domain}...`)
     const rarts = await getArts(url, 100)
-
-    console.log(`${domain}: ${rarts.length} articles.`)
 
     for (const article of rarts) {
       if (article.draft) continue
@@ -124,7 +114,6 @@ export async function getZendeskArticles(domain: string): Promise<ZendeskArticle
     debugger
   }
 
-  console.log(`Articles gathering for domain ${domain} done.`)
 
   return zdars
 

@@ -426,14 +426,14 @@ export function buildWorker(w: WorkerConfig) {
       if (!worker.parameters || !worker.parameters.agent) return
 
       if (!teamId) {
-        console.warn(`Cannot load referenced agent ${worker.parameters.agent} without team ID`)
+        console.error(`Cannot load referenced agent ${worker.parameters.agent} without team ID`)
         return
       }
 
       const agent = await loadAgent(worker.parameters.agent, teamId)
 
       if (!agent) {
-        console.warn(`Referenced agent ${worker.parameters.agent} not found or not accessible for current team`)
+        console.error(`Referenced agent ${worker.parameters.agent} not found or not accessible for current team`)
         return
       }
 
@@ -460,7 +460,6 @@ export function buildWorker(w: WorkerConfig) {
     clone(a: any) {
       const agent: Agent = a
       const nworker = worker.registry.create(agent)
-      console.log(worker.id, nworker.id, worker.id == nworker.id)
 
       nworker.config.x = worker.config.x + 200
       nworker.config.y = worker.config.y + 200

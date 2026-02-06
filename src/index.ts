@@ -9,7 +9,7 @@ import { executeCronJobs } from './cron'
 import Exa from 'exa-js'
 import { telerivetHook } from './integrations/telerivet'
 
-const version = '2.0206.1152'
+const version = '2.0206.1237'
 
 const app = express()
 app.use(cors())
@@ -75,7 +75,7 @@ app.post('/agent', async (req: Request<any, any, AgentParameters & { id: number,
 
   } catch (error) {
     const er = `Error: ${error?.toString() ?? 'Unknown error'}`
-    console.log(`Error: ${error?.toString() ?? 'Unknown error'}`)
+    console.error(`Error: ${error?.toString() ?? 'Unknown error'}`)
     res.status(500).send(er)
   }
 })
@@ -104,8 +104,6 @@ app.post('/decors', async (req: Request, res: Response): Promise<void> => {
       timeout: 30000
     }
 
-    console.log("Request: ", config)
-
 
     if (method !== 'GET' && method !== 'HEAD') {
       if (otherParams && Object.keys(otherParams).length > 0) {
@@ -127,8 +125,6 @@ app.post('/decors', async (req: Request, res: Response): Promise<void> => {
       'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
       'Content-Type': response.headers['content-type'] || 'application/json'
     })
-
-    console.log(response.data)
 
 
     res.status(response.status).json(response.data)
@@ -216,7 +212,7 @@ app.post('/integrations/:provider/:agent', async (req, res) => {
       await telerivetHook(body, Number(agent), useDebug)
     }
   } catch (error) {
-    console.log(`Error Executing Telerivet Integration ${error}`)
+    console.error(`Error Executing Telerivet Integration ${error}`)
   }
 
 })

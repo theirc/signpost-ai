@@ -87,8 +87,6 @@ async function execute(worker: OnboardWorker, p: AgentParameters) {
 
   if (!input) return
 
-  console.log("State:", state)
-
   worker.fields.finished.value = false
 
   let next: OnboardItem = null

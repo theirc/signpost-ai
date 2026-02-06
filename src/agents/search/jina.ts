@@ -19,7 +19,7 @@ export async function searchJina(p: VectorSerach) {
   const results: VectorDocument[] = []
 
   if (!keys.jina) {
-    console.log("Jina: No api key provided.")
+    console.error("Jina: No api key provided.")
     throw new Error("Jina: No api key provided.")
   }
 

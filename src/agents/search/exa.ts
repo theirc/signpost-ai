@@ -9,7 +9,7 @@ export async function searchExa(p: VectorSerach) {
   let results: VectorDocument[] = []
 
   if (!keys.exa) {
-    console.log("Exa: No api key provided.")
+    console.error("Exa: No api key provided.")
     throw new Error("Exa: No api key provided.")
   }
 

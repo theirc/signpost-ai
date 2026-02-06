@@ -35,11 +35,11 @@ export async function searchYouTube(p: VectorSerach) {
   let apiKey = keys.youtube
 
   if (!domain) {
-    console.log("YouTube: No domain provided.")
+    console.warn("YouTube: No domain provided.")
     return results
   }
   if (!apiKey) {
-    console.log("YouTube: No api key provided.")
+    console.warn("YouTube: No api key provided.")
     throw new Error("YouTube: No api key provided.")
   }
 
@@ -49,7 +49,7 @@ export async function searchYouTube(p: VectorSerach) {
     const channelId = channelsRequest.data.items?.[0]?.id
 
     if (!channelId) {
-      console.log("YouTube: No channel found for domain:", domain)
+      console.warn("YouTube: No channel found for domain:", domain)
       throw new Error("YouTube: No channel found for domain:" + domain)
     }
 
@@ -67,7 +67,7 @@ export async function searchYouTube(p: VectorSerach) {
     }
 
   } catch (error) {
-    console.log("Error:", error.toString())
+    console.error("Error:", error.toString())
     throw error
   }
 

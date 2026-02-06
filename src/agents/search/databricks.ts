@@ -111,7 +111,6 @@ async function search(p: VectorSerach) {
 
 async function load({ keys, team }: { keys: APIKeys, team: string }) {
 
-  console.log(team)
 
   if (!keys.databricks) return []
 

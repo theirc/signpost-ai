@@ -69,9 +69,9 @@ async function getToken(key: string) {
   }
 
   try {
-    console.log("Regenerating Token...")
+    // console.log("Regenerating Token...")
     const r = await axios.post<ResponseToken>("https://signpost-ia-app-qa.azurewebsites.net/decors", body)
-    console.log("Token: ", r.data)
+    // console.log("Token: ", r.data)
 
     if (r.data.access_token) {
       token.last = r.data.access_token
@@ -135,7 +135,7 @@ async function search({ keys, limit, query }: VectorSerach) {
     }
   }
 
-  console.log("Rescue.net:", documents)
+  // console.log("Rescue.net:", documents)
   return documents
 }
 

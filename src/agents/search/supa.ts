@@ -39,7 +39,6 @@ export async function searchSupabase(p: VectorSerach) {
     return v
   })
 
-  console.log(data)
 
   return results
 }
@@ -70,7 +69,6 @@ export async function searchSupabaseDomains(p: VectorSerach) {
     return v
   })
 
-  console.log(data)
 
   return results
 }
@@ -103,7 +101,6 @@ export async function searchServices(p: VectorSerach) {
     return v
   })
 
-  console.log(data)
 
   return results
 }

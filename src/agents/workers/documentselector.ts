@@ -75,7 +75,6 @@ ${question}
 
   if (response.success) {
     response.data.articles ||= []
-    console.log(response.data)
     response.data.articles ||= []
     for (const doc of response.data.articles) {
       searchResults.push(documents[doc])

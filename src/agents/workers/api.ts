@@ -50,16 +50,12 @@ function create(agent: Agent) {
 
 async function execute(worker: ApiWorker, p: AgentParameters) {
   const logPrefix = `[API Worker (${worker.id})]`
-  console.log(`${logPrefix} - Executing with parameters:`, worker.parameters)
-  console.log(`${logPrefix} - Input body value:`, worker.fields.body.value)
-  console.log(`${logPrefix} - Provided AgentParameters.apikeys:`, p.apiKeys ? Object.keys(p.apiKeys) : 'None')
 
   try {
     // --- Common Setup --- 
     const runtimeEndpoint = worker.fields.endpointUrlInput?.value as string | undefined
     const fallbackEndpoint = worker.parameters.endpoint || ''
     const endpoint = runtimeEndpoint && runtimeEndpoint.trim() !== '' ? runtimeEndpoint.trim() : fallbackEndpoint
-    console.log(`${logPrefix} - Determined Endpoint: ${endpoint} (Runtime: ${runtimeEndpoint}, Fallback: ${fallbackEndpoint})`)
 
     if (!endpoint) {
       console.error(`${logPrefix} - Endpoint is missing!`)
@@ -74,12 +70,10 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
     const username = worker.parameters.username
     const selectedKeyName = worker.parameters.selectedKeyName || ''
     const bodyValue = worker.fields.body.value
-    console.log(`${logPrefix} - Method: ${method}, Timeout: ${timeout}, AuthType: ${authType}, SelectedKey: ${selectedKeyName || 'None'}`)
 
     let params = {}
     try {
       params = JSON.parse(paramsString)
-      console.log(`${logPrefix} - Parsed Params:`, params)
     } catch (e) {
       console.error(`${logPrefix} - Failed to parse Params JSON: ${paramsString}`, e)
       throw new Error("Invalid params JSON in parameters.")
@@ -87,7 +81,6 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
     let headers: Record<string, string> = {}
     try {
       headers = JSON.parse(headersString)
-      console.log(`${logPrefix} - Parsed Headers (initial):`, headers)
     } catch (e) {
       console.error(`${logPrefix} - Failed to parse Headers JSON: ${headersString}`, e)
       throw new Error("Invalid headers JSON in parameters.")
@@ -99,11 +92,9 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
     Object.keys(headers).forEach(key => {
       if (key.toLowerCase() === 'x-api-key' || key.toLowerCase() === 'authorization') delete headers[key]
     })
-    console.log(`${logPrefix} - Headers after cleaning sensitive ones:`, headers)
 
     let actualValue: string | undefined
     if (authType !== 'none' && authType) {
-      console.log(`${logPrefix} - Auth required (${authType}). Selected Key Name: ${selectedKeyName}`)
       if (!selectedKeyName) {
         console.error(`${logPrefix} - Auth type specified but no key name selected.`)
         throw new Error(`Auth type '${authType}' selected, but no Stored Key Name chosen.`)
@@ -114,15 +105,12 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
       if (envVarValue !== undefined && envVarValue !== '') {
         actualValue = envVarValue
         // DO NOT log the actual key value here for security
-        console.log(`${logPrefix} - Found key '${selectedKeyName}' in environment variable.`)
       } else {
-        console.log(`${logPrefix} - Key '${selectedKeyName}' not found or empty in environment variables. Checking AgentParameters...`)
         // 2. If not in env, check AgentParameters.apikeys
         const paramKeyValue = p.apiKeys?.[selectedKeyName]
         if (paramKeyValue !== undefined) {
           actualValue = paramKeyValue
           // DO NOT log the actual key value here for security
-          console.log(`${logPrefix} - Found key '${selectedKeyName}' in AgentParameters.apikeys.`)
         } else {
           // 3. If not found in either, throw error
           console.error(`${logPrefix} - Key '${selectedKeyName}' not found in environment or AgentParameters.`)
@@ -133,54 +121,42 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
 
     switch (authType) {
       case 'basic':
-        console.log(`${logPrefix} - Applying Basic Auth.`)
         if (!username) {
           console.error(`${logPrefix} - Basic Auth selected but username is missing.`)
           throw new Error("Username required for Basic Auth.")
         }
         if (actualValue !== undefined) {
           headers.Authorization = `Basic ${btoa(`${username}:${actualValue}`)}`
-          console.log(`${logPrefix} - Added Basic Auth header.`)
         } else {
           console.warn(`${logPrefix} - Basic Auth selected but key value was not found.`)
         }
         break
       case 'bearer':
-        console.log(`${logPrefix} - Applying Bearer Auth.`)
         if (actualValue !== undefined) {
           headers.Authorization = `Bearer ${actualValue}`
-          console.log(`${logPrefix} - Added Bearer Auth header.`)
         } else {
           console.warn(`${logPrefix} - Bearer Auth selected but key value was not found.`)
         }
         break
       case 'api_key':
-        console.log(`${logPrefix} - Applying API Key Auth (X-API-Key header).`)
         if (actualValue !== undefined) {
           headers['X-API-Key'] = actualValue
-          console.log(`${logPrefix} - Added X-API-Key header.`)
         } else {
           console.warn(`${logPrefix} - API Key Auth selected but key value was not found.`)
         }
         break
       default:
-        console.log(`${logPrefix} - No Auth or unknown auth type: ${authType}.`)
     }
 
     let data = undefined
     if (method !== 'GET' && bodyValue) {
       data = bodyValue
-      console.log(`${logPrefix} - Method is ${method}, using body value.`)
       // Attempt to set Content-Type if not present and body looks like JSON
       if (!headers['Content-Type'] && typeof data === 'string' && (data.trim().startsWith('{') || data.trim().startsWith('['))) {
         headers['Content-Type'] = 'application/json'
-        console.log(`${logPrefix} - Auto-detected JSON body, setting Content-Type to application/json.`)
       }
     }
     // --- End Common Setup ---
-    console.log(`${logPrefix} - Final Headers before request:`, headers)
-    console.log(`${logPrefix} - Final Params before request:`, params)
-    console.log(`${logPrefix} - Final Data before request:`, data ? (typeof data === 'string' ? data.substring(0, 100) + '...' : '[Non-string data]') : 'None')
 
     // --- Environment Check and Call --- 
     const isBrowser = typeof window !== 'undefined'
@@ -214,7 +190,6 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
 
     } else {
       // BACKEND: Make direct call
-      console.log(`${logPrefix} [Node.js] - Making direct ${method} request to: ${endpoint}`)
       const axiosConfig = {
         method: method as any,
         url: endpoint,
@@ -224,12 +199,7 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
         timeout: timeout,
         validateStatus: (status) => status >= 200 && status < 500, // Handle 4xx locally
       }
-      console.log(`${logPrefix} [Node.js] - Axios config:`, {
-        ...axiosConfig,
-        headers: { ...axiosConfig.headers, Authorization: '[REDACTED]', 'X-API-Key': '[REDACTED]' } // Redact sensitive headers for logging
-      })
       const directResponse = await axios(axiosConfig)
-      console.log(`${logPrefix} [Node.js] - Direct response status: ${directResponse.status} ${directResponse.statusText}`)
       apiResponseData = directResponse.data
       apiResponseStatus = directResponse.status
       apiResponseStatusText = directResponse.statusText
@@ -237,22 +207,18 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
     // --- End Environment Check and Call --- 
 
     // --- Common Response Handling --- 
-    console.log(`${logPrefix} - Handling response. Status: ${apiResponseStatus}, StatusText: ${apiResponseStatusText}`)
     worker.fields.error.value = '' // Clear previous error
 
     if (apiResponseStatus && apiResponseStatus >= 200 && apiResponseStatus < 300) {
       // Success (2xx)
-      console.log(`${logPrefix} - Success Response Status: ${apiResponseStatus}`)
       if (apiResponseData !== undefined && apiResponseData !== null) {
         const responseString = typeof apiResponseData === 'object'
           ? JSON.stringify(apiResponseData, null, 2)
           : String(apiResponseData)
         worker.fields.response.value = responseString
-        console.log(`${logPrefix} - Setting response field (first 200 chars):`, responseString.substring(0, 200) + '...')
       } else {
         const successMsg = `Request successful: ${apiResponseStatus} ${apiResponseStatusText || ''}`
         worker.fields.response.value = successMsg
-        console.log(`${logPrefix} - Setting response field: ${successMsg}`)
       }
     } else {
       // Non-Success (3xx, 4xx, or error from proxy)
@@ -269,7 +235,6 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
       const fullErrorMsg = errorDataString ? `${errorMsg} (Response Data: ${errorDataString})` : errorMsg
       worker.fields.error.value = fullErrorMsg
       worker.fields.response.value = ''
-      console.log(`${logPrefix} - Setting error field: ${fullErrorMsg}`)
     }
     // --- End Common Response Handling ---
 
@@ -303,7 +268,6 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
       console.error(`${logPrefix} - Unknown error type:`, error)
     }
     worker.fields.error.value = errorMessage
-    console.log(`${logPrefix} - Setting error field from catch block: ${errorMessage}`)
     // --- End Common Error Handling ---
   }
 }
