@@ -20,7 +20,6 @@ async function execute(worker: LanguageDetectionWorker, p: AgentParameters) {
 
   const languages = worker.parameters.languages || []
 
-  console.log(languages)
 
   let detlangs = []
 
@@ -34,7 +33,6 @@ async function execute(worker: LanguageDetectionWorker, p: AgentParameters) {
     language = detlangs[0]?.[0] || "eng"
   }
 
-  console.log(language)
 
   worker.fields.language.value = language
 

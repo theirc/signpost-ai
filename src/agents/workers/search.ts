@@ -15,7 +15,6 @@ async function generateEmbedding(text: string, apiKeys: APIKeys): Promise<{
   error: Error | null
 }> {
   try {
-    console.log('[Worker Embedding] Starting OpenAI embedding generation...')
 
     const openaiApiKey = apiKeys.openai
     if (!openaiApiKey) {
@@ -52,7 +51,6 @@ async function generateEmbedding(text: string, apiKeys: APIKeys): Promise<{
     }
 
     const embedding = data.data[0].embedding
-    console.log('[Worker Embedding] OpenAI embedding generated successfully.')
 
     // Verify the embedding size
     if (embedding.length !== 1536) {
@@ -144,14 +142,12 @@ function deduplicateDocuments(array: VectorDocument[]): VectorDocument[] {
 }
 
 async function execute(worker: SearchWorker, { apiKeys }: AgentParameters) {
-  console.log("Executing search worker with parameters:", worker.parameters)
 
   worker.fields.output.value = []
   worker.fields.references.value = []
 
   const query = worker.fields.input.value || ""
   if (!query) {
-    console.log("Search worker: No query provided.")
     return
   }
 
@@ -173,17 +169,13 @@ async function execute(worker: SearchWorker, { apiKeys }: AgentParameters) {
     const similarityThreshold = worker.parameters.distance ?? 0.3
 
     if (collectionIds && collectionIds.length > 0) {
-      console.log(`[Supabase Path] Searching ${collectionIds.length} collections:`, collectionIds)
       try {
         const { data: queryEmbedding, error: embeddingError } = await generateEmbedding(query, apiKeys)
         if (embeddingError || !queryEmbedding) {
           throw embeddingError || new Error("Failed to generate query embedding.")
         }
 
-        console.log(`[Supabase Path] Generated query embedding (length: ${queryEmbedding.length}).`)
-
         const searchPromises = collectionIds.map(async (collectionId) => {
-          console.log(`  - Searching collection: ${collectionId} (Limit: ${limit}, Threshold: ${similarityThreshold})`)
           try {
             const { data: supabaseMatches, error: rpcError } = await supabase.rpc('similarity_search', {
               query_vector: queryEmbedding as any,
@@ -211,14 +203,12 @@ async function execute(worker: SearchWorker, { apiKeys }: AgentParameters) {
 
         const resultsFromAllCollections = await Promise.all(searchPromises)
         finalResults = resultsFromAllCollections.flat()
-        console.log(`[Supabase Path] Total results: ${finalResults.length}`)
 
       } catch (error) {
         console.error("[Supabase Path] Error during search process:", error)
         finalResults = []
       }
     } else {
-      console.log("[Supabase Path] No collection IDs provided.")
       finalResults = []
     }
 
@@ -241,7 +231,6 @@ async function execute(worker: SearchWorker, { apiKeys }: AgentParameters) {
       return
     }
     const url = `${endpoint}/api/2.0/vector-search/indexes/${index}/query`
-    console.log(`[Databricks Path] Searching index '${index}' at ${url} with query:`, query)
 
     const body = {
       url,
@@ -267,8 +256,6 @@ async function execute(worker: SearchWorker, { apiKeys }: AgentParameters) {
       count++
     }
 
-    console.log(`[Databricks Path] Search results from Databricks:`, results)
-
 
   } else {
     // --- External Engine Search Path (Weaviate, Exa, etc.) --- 
@@ -277,7 +264,6 @@ async function execute(worker: SearchWorker, { apiKeys }: AgentParameters) {
     const externalSearchDistance = worker.parameters.distance ?? 0.5 // Use distance, default 0.5
 
     if (domain) {
-      console.log(`[External Path] Searching engine '${engine}' in domain: ${domain} (Limit: ${limit}, Distance: ${externalSearchDistance})`)
       try {
         const externalSearchUrl = "https://directus-qa-support.azurewebsites.net/search" // Assuming this URL handles different engines or we need logic here
         const r = await axios.post(externalSearchUrl, {
@@ -289,24 +275,19 @@ async function execute(worker: SearchWorker, { apiKeys }: AgentParameters) {
           // engine: engine, 
         })
         finalResults = r.data as VectorDocument[] || [] // Assign directly
-        console.log(`[External Path] Total results: ${finalResults.length}`)
       } catch (error) {
         console.error("[External Path] Error during search:", error)
         finalResults = [] // Ensure empty results on error
       }
     } else {
-      console.log("[External Path] No domain provided.")
       finalResults = []
     }
   }
 
   // --- Post-Search Processing (Deduplication) --- 
-  console.log("Total results before deduplication:", finalResults.length)
   deduped = deduplicateDocuments(finalResults)
-  console.log("Deduplicated results:", deduped.length)
 
   if (deduped.length === 0) {
-    console.log("Search worker: No results found after search and deduplication.")
     return
   }
 
@@ -320,7 +301,6 @@ async function execute(worker: SearchWorker, { apiKeys }: AgentParameters) {
     title: d.title || "Search Result"
   }))
 
-  console.log("Search worker execution finished.")
 }
 
 
@@ -334,13 +314,11 @@ function getTool(w: SearchWorker, p: AgentParameters): ToolConfig {
 
     async execute(args, ctx) {
       const { query } = args
-      console.log(`🔎 Executing Search Tool with query: ${query}`)
       w.fields.input.value = query
       await w.execute(p)
       const results = w.fields.output.value as VectorDocument[] || []
       const mddocs = convertDocumentsToMarkdown(results)
       ctx['searchResults'] = mddocs
-      console.log(`🔎 Search Tool executed. result: ${mddocs}`)
 
       return mddocs
     },

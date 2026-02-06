@@ -25,7 +25,6 @@ async function detectLanguage(text: string, googleTranslateApiKey: string) {
       }
     })
     const detection = response.data.data.detections[0][0]
-    console.log(`Detected language: ${detection.language}`)
     return detection.language
   } catch (error) {
     console.error('Error detecting language: ', error)
@@ -103,7 +102,7 @@ async function googletextToSpeech(text: string, format: string, apikeys: APIKeys
     })
 
     const audioContent = response.data?.audioContent
-    
+
     // Determine file extension based on format
     let ext = "ogg"
     if (format === "MP3") {
@@ -111,7 +110,7 @@ async function googletextToSpeech(text: string, format: string, apikeys: APIKeys
     } else if (format === "OGG_OPUS") {
       ext = "ogg"
     }
-    
+
     return { audio: audioContent, ext }
 
   } catch (error) {
@@ -127,7 +126,7 @@ async function openaiTextToSpeech(text: string, apikeys: APIKeys): Promise<{ aud
     }
 
     const openai = new OpenAI({ apiKey: apikeys.openai, dangerouslyAllowBrowser: true })
-    
+
     // Use opus format for Telerivet compatibility (audio/ogg; codecs=opus)
     const response = await openai.audio.speech.create({
       model: "tts-1",
@@ -145,7 +144,7 @@ async function openaiTextToSpeech(text: string, apikeys: APIKeys): Promise<{ aud
       binary += String.fromCharCode(bytes[i])
     }
     const base64 = btoa(binary)
-    
+
     return { audio: base64, ext: "ogg" } // opus format uses ogg container
   } catch (error) {
     throw new Error(`OpenAI TTS error: ${error instanceof Error ? error.message : String(error)}`)
@@ -155,18 +154,12 @@ async function openaiTextToSpeech(text: string, apikeys: APIKeys): Promise<{ aud
 async function execute(worker: TTSWorker, { apiKeys }: AgentParameters) {
   const text = worker.fields.input.value
   const engine = worker.parameters.engine || "google" // Default to Google for backward compatibility
-  
-  console.log("[TTS Execute] Engine parameter:", worker.parameters.engine)
-  console.log("[TTS Execute] Using engine:", engine)
-  console.log("[TTS Execute] Full parameters:", worker.parameters)
 
   let result: { audio: string, ext: string }
 
   if (engine === "openai") {
-    console.log("[TTS Execute] Calling OpenAI TTS API")
     result = await openaiTextToSpeech(text, apiKeys)
   } else {
-    console.log("[TTS Execute] Calling Google TTS API")
     // Use OGG_OPUS format for Google TTS to ensure Telerivet compatibility
     result = await googletextToSpeech(text, "OGG_OPUS", apiKeys)
   }

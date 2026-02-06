@@ -54,7 +54,6 @@ function deduplicateLinks(array: VectorDocument[]): VectorDocument[] {
 }
 
 async function execute(worker: VectorSearchWorker, { apiKeys, team }: AgentParameters) {
-  console.log("Executing vector search worker with parameters:", worker.parameters)
 
   worker.fields.output.value = []
   worker.fields.references.value = []
@@ -64,13 +63,11 @@ async function execute(worker: VectorSearchWorker, { apiKeys, team }: AgentParam
 
   if (!query) {
     worker.error = "Vector Search worker: No query provided."
-    console.log(worker.error)
     return
   }
 
   if (!source) {
     worker.error = "Vector Search worker: No Source provided."
-    console.log(worker.error)
     return
   }
 
@@ -83,7 +80,6 @@ async function execute(worker: VectorSearchWorker, { apiKeys, team }: AgentParam
 
   if (!data) {
     worker.error = "Vector Search worker: Source not found."
-    console.log(worker.error)
     return
   }
 
@@ -91,14 +87,11 @@ async function execute(worker: VectorSearchWorker, { apiKeys, team }: AgentParam
 
   if (!sources || sources.length == 0) {
     worker.error = "Vector Search worker: Sources not defined."
-    console.log(worker.error)
     return
   }
 
 
   let finalResults: VectorDocument[] = []
-
-  console.log("Sources:", sources)
 
   for (const s of sources) {
 
@@ -121,7 +114,6 @@ async function execute(worker: VectorSearchWorker, { apiKeys, team }: AgentParam
 
   }
 
-  console.log("Results:", finalResults)
 
 
   worker.fields.output.value = finalResults
@@ -133,7 +125,6 @@ async function execute(worker: VectorSearchWorker, { apiKeys, team }: AgentParam
 
   worker.fields.textOutput.value = convertDocumentsToMarkdown(finalResults)  // Text format
 
-  console.log("Search worker execution finished.")
 }
 
 
@@ -147,14 +138,11 @@ function getTool(w: SearchWorker, p: AgentParameters): ToolConfig {
 
     async execute(args, ctx) {
       const { query } = args
-      console.log(`🔎 Executing Search Tool with query: ${query}`)
       w.fields.input.value = query
       await w.execute(p)
       const results = w.fields.output.value as VectorDocument[] || []
       const mddocs = convertDocumentsToMarkdown(results)
       ctx['searchResults'] = mddocs
-      console.log(`🔎 Search Tool executed. result: ${mddocs}`)
-
       return mddocs
     },
   }

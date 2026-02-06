@@ -20,7 +20,7 @@ export async function searchWeaviate(p: VectorSerach) {
   let results: VectorDocument[] = []
 
   if (!domain) {
-    console.log("Weaviate: No domain provided.")
+    console.warn("Weaviate: No domain provided.")
     return results
   }
 
@@ -48,7 +48,7 @@ export async function searchWeaviate(p: VectorSerach) {
     }))
 
   } catch (error) {
-    console.log("Error:", error.toString())
+    console.error("Error:", error.toString())
     throw error
   }
 

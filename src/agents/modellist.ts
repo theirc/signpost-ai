@@ -28,9 +28,9 @@ const openAiModels = [
 ]
 
 const anthropicModels = [
-  "claude-3-5-sonnet-latest",
-  "claude-3-5-haiku-latest",
-  "claude-3-opus-latest"
+  "claude-sonnet-4-5",
+  "claude-haiku-4-5",
+  "claude-opus-4-5"
 ]
 
 const googleModels = [

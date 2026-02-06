@@ -204,6 +204,12 @@ export function createAgent(config: AgentConfig) {
         p.error = error.toString()
       }
 
+      if (p?.error) {
+        console.error(`Agent '${agent.title}' exeuted with error: ${p.error}`)
+      } else {
+        console.log(`Agent '${agent.title}' exeuted successfully`)
+      }
+
       agent.currentWorker = null
       agent.update()
     },

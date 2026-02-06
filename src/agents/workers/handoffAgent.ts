@@ -75,18 +75,14 @@ async function getHandoffAgent(worker: HandoffAgentWorker, p: AgentParameters): 
   hoa.on("agent_handoff", (ctx, agent) => {
     const message = `Handoff Worker handoff to Agent with description '${agent.handoffDescription}'`
     p.agent.log({ type: "handoff", message, })
-
-    console.log(message)
   })
   hoa.on("agent_tool_start", (ctx, b) => {
     const message = `Handoff Worker Starts invoking Tool '${b.name}'`
     p.agent.log({ type: "tool_start", message, })
-    console.log(message, b, ctx)
   })
   hoa.on("agent_tool_end", (ctx, b) => {
     const message = `Handoff Worker Ends invoking Tool '${b.name}'`
     p.agent.log({ type: "tool_end", message, })
-    console.log(message, b, ctx)
   })
 
   return hoa
