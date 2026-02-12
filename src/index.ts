@@ -9,7 +9,7 @@ import { executeCronJobs } from './cron'
 import Exa from 'exa-js'
 import { telerivetHook } from './integrations/telerivet'
 
-const version = '2.0206.1237'
+const version = '2.0212.1326'
 
 const app = express()
 app.use(cors())
@@ -151,6 +151,60 @@ app.post('/decors', async (req: Request, res: Response): Promise<void> => {
     }
   }
 })
+
+app.use('/decorsify/', async (req: Request, res: Response): Promise<void> => {
+  const targetUrl = req.originalUrl.replace('/decorsify/', '')
+
+  if (!targetUrl) {
+    res.status(400).json({ error: 'URL is required' })
+    return
+  }
+
+  if (req.method === 'OPTIONS') {
+    res.set({
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': '*',
+      'Access-Control-Allow-Headers': '*',
+    })
+    res.status(204).end()
+    return
+  }
+
+  try {
+    const config: AxiosRequestConfig = {
+      method: req.method as any,
+      url: targetUrl,
+      headers: { ...req.headers, host: new URL(targetUrl).host },
+      data: ['GET', 'HEAD'].includes(req.method) ? undefined : req.body,
+      params: req.query,
+      timeout: 120000,
+      responseType: 'stream',
+      validateStatus: () => true,
+    }
+    delete config.headers!['content-length']
+
+    const response = await axios(config)
+
+    res.set({
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': '*',
+      'Access-Control-Allow-Headers': '*',
+      'Access-Control-Expose-Headers': '*',
+    })
+
+    const fwd = ['content-type', 'content-encoding', 'transfer-encoding', 'cache-control']
+    for (const h of fwd) {
+      if (response.headers[h]) res.set(h, response.headers[h])
+    }
+
+    res.status(response.status)
+    response.data.pipe(res)
+  } catch (error: any) {
+    console.error('Decorsify proxy error:', error?.message || 'Unknown error')
+    res.status(502).json({ error: 'Proxy error', message: error?.message || 'Unknown error' })
+  }
+})
+
 
 
 app.post('/cron', async (req, res) => {
