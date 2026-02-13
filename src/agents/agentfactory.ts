@@ -252,6 +252,12 @@ export function createAgent(config: AgentConfig) {
     deleteWorker(id: string) {
       delete workers[id]
     },
+
+    async resetAgent(uid: string) {
+      await supabase.from("states").delete().eq("id", uid)
+      await supabase.from("history").delete().eq("uid", uid)
+    },
+
   }
 
   return agent
