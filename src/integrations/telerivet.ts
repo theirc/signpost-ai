@@ -176,12 +176,24 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
     }
   }
 
-  await sendMessage(response || "", r.from_number, projectId, apiKeys.telerivet, quickReplies)
+  response = response || ""
+
+  if (response.includes("<break>")) {
+    const parts = response.split("<break>").map((p: string) => p.trim()).filter(p => p.length > 0)
+    for (let i = 0; i < parts.length - 1; i++) {
+      await sendMessage(parts[i], r.from_number, projectId, apiKeys.telerivet, [])
+    }
+    if (parts.length > 0) await sendMessage(parts[parts.length - 1], r.from_number, projectId, apiKeys.telerivet, quickReplies)
+  } else {
+    await sendMessage(response, r.from_number, projectId, apiKeys.telerivet, quickReplies)
+  }
 
 }
 
 
 async function sendMessage(content: string, to_number: string, projectId: string, api_key: string, quickReplies: string[], media_url?: string) {
+
+  if (!content && !media_url) return
 
   const telerivetUrl = `https://api.telerivet.com/v1/projects/${projectId}/messages/send`
 
@@ -193,8 +205,6 @@ async function sendMessage(content: string, to_number: string, projectId: string
   }
 
   if (media_url) payload.media_urls = [media_url]
-
-
 
   if (quickReplies && quickReplies.length > 0) {
 
