@@ -105,6 +105,12 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
   content = content.trim()
   const projectId = r.project_id
 
+  if (content == "/reset") {
+    await a.resetAgent(uid)
+    await sendMessage("The chat history has been reset.", r.from_number, projectId, apiKeys.telerivet, [])
+    return
+  }
+
   const p: AgentParameters = {
     input: {
       message: content,
@@ -115,9 +121,7 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
   }
 
   if (inputAudio) p.input.audio = inputAudio
-
   await a.execute(p)
-
   if (p.error) return `Agent Error: ${p.error}`
 
   let { response, audio } = p.output || {}

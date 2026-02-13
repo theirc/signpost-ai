@@ -158,7 +158,7 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
     return tool({
       name: t.description,
       description: t.description,
-      parameters: t.parameters,
+      parameters: t.parameters as any,
       execute: t.execute,
     })
   })

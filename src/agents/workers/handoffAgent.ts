@@ -37,7 +37,7 @@ function getTools(worker: HandoffAgentWorker, p: AgentParameters): FunctionTool[
     if (!description) throw new Error(`Worker does not have a Tool Description parameter set. Please set it to describe the tool's purpose.`)
     const searchTool = tool({
       description,
-      parameters,
+      parameters: parameters as any,
       execute,
     })
     tools.push(searchTool)
@@ -59,7 +59,7 @@ async function getHandoffAgent(worker: HandoffAgentWorker, p: AgentParameters): 
   const tools: FunctionTool[] = agentTools.map(t => {
     return tool({
       description: t.description,
-      parameters: t.parameters,
+      parameters: t.parameters as any,
       execute: t.execute,
     })
   })

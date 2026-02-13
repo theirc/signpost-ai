@@ -1,4 +1,5 @@
-import OpenAI from "openai"
+import OpenAI, { ClientOptions } from "openai"
+import { isBrowser } from "../isbrowser"
 
 declare global {
   type SupportedVectorExtensions = keyof typeof supportedExtensions
@@ -34,7 +35,16 @@ const supportedExtensions = {
 
 export async function createEmbedding(input: string, apiKey: string) {
 
-  const openai = new OpenAI({ apiKey, dangerouslyAllowBrowser: true })
+  const request: ClientOptions = {
+    apiKey,
+    dangerouslyAllowBrowser: true,
+  }
+
+  if (isBrowser) {
+    request.baseURL = `https://signpost-ia-app-qa.azurewebsites.net/decorsify/https://api.openai.com/v1`
+  }
+
+  const openai = new OpenAI(request)
 
   const embedding = await openai.embeddings.create({
     model: "text-embedding-3-small",
