@@ -3,6 +3,7 @@ import { workerRegistry } from "./registry"
 import { buildWorker } from "./worker"
 import { ulid } from 'ulid'
 import { ApiWorker } from "./workers/api"
+import { integrations } from "./integrations"
 
 type LogTypes = "execution" | "error" | "info" | "handoff" | "tool_start" | "tool_end"
 
@@ -211,7 +212,7 @@ export function createAgent(config: AgentConfig) {
 
     },
 
-    async sendHumanHITLMessage(message: string, uid: string, team: string, endSession = false) {
+    async sendHumanHITLMessage(message: string, uid: string, team: string, endSession: boolean, integrationPayload: IntegrationsPayload) {
 
       if (!message) return
 
@@ -219,6 +220,8 @@ export function createAgent(config: AgentConfig) {
         console.log(`Saving Human message for '${agent.title} in HITL: ${message}'`)
         const historyWorker = agent.getHistoryWorker()
         if (historyWorker) await historyWorker.addMessageToHistory(uid, `${agent.id}`, team, "human", message)
+
+        if (integrationPayload?.telerivet) await integrations.telerivet.sendMessage(message, integrationPayload.telerivet)
 
         if (endSession) {
           const { data, error } = await supabase.from("states").select("*").eq("id", uid).single()
@@ -286,7 +289,7 @@ export function createAgent(config: AgentConfig) {
         }
       }
 
-      if (hasUid && p.state.agent.hitl.active) {
+      if (hasUid && p.state?.agent?.hitl?.active) {
         await agent.sendUserHITLMessage({
           causes: p.state.agent?.hitl.causes || [],
           integration: p.integrationPayload || {}
@@ -323,8 +326,8 @@ export function createAgent(config: AgentConfig) {
         console.log(`Agent '${agent.title}' exeuted successfully`)
       }
 
-      if (hasUid && p.state.agent.hitl.active) await agent.sendUserHITLMessage({
-        causes: p.state.agent?.hitl.causes || [],
+      if (hasUid && p.state?.agent?.hitl?.active) await agent.sendUserHITLMessage({
+        causes: p.state?.agent?.hitl?.causes || [],
         integration: p.integrationPayload || {}
       })
 
