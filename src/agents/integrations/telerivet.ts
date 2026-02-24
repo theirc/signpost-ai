@@ -1,11 +1,15 @@
 import axios from "axios"
+import { isBrowser } from "../isbrowser"
 
 async function sendMessage(content: string, intPayload: TelerivetIntegrationPayload) {
 
   const { phone: destination, apiKey: api_key, projectId } = intPayload
   if (!content) return
+  let decors = ""
 
-  const telerivetUrl = `https://api.telerivet.com/v1/projects/${projectId}/messages/send`
+  if (isBrowser) decors = `https://signpost-ia-app-qa.azurewebsites.net/decorsify/`
+
+  const telerivetUrl = `${decors}https://api.telerivet.com/v1/projects/${projectId}/messages/send`
 
   const payload: any = {
     content,
