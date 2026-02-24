@@ -146,22 +146,22 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
 
   // Extract all image URLs from response (both markdown and plain URLs)
   if (response) {
-    // First, extract markdown image URLs: ![alt](url)
-    const markdownImageRegex = /!\[.*?\]\((https?:\/\/[^\)]+\.(jpg|jpeg|png|gif)(?:\?[^\)]*)?)\)/gi
+    // First, extract markdown file URLs: ![alt](url) or [text](url)
+    const markdownFileRegex = /!?\[.*?\]\((https?:\/\/[^\)\s]+)\)/gi
     let match
-    while ((match = markdownImageRegex.exec(response)) !== null) {
+    while ((match = markdownFileRegex.exec(response)) !== null) {
       media_urls.push(match[1])
     }
-    // Remove markdown images from response
-    response = response.replace(/!\[.*?\]\(https?:\/\/[^\)]+\.(jpg|jpeg|png|gif)(?:\?[^\)]*)?\)/gi, '').trim()
+    // Remove markdown links/images from response
+    response = response.replace(/!?\[.*?\]\(https?:\/\/[^\)\s]+\)/gi, '').trim()
 
-    // Then, extract plain image URLs (not in markdown format)
-    const plainImageRegex = /(?<!\]\()https?:\/\/[^\s<>]+\.(jpg|jpeg|png|gif)(?:\?[^\s<>]*)?\b/gi
-    while ((match = plainImageRegex.exec(response)) !== null) {
+    // Then, extract plain URLs (not in markdown format)
+    const plainFileRegex = /(?<!\]\()https?:\/\/[^\s<>]+/gi
+    while ((match = plainFileRegex.exec(response)) !== null) {
       media_urls.push(match[0])
     }
-    // Remove plain image URLs from response
-    response = response.replace(/https?:\/\/[^\s<>]+\.(jpg|jpeg|png|gif)(?:\?[^\s<>]*)?\b/gi, '').trim()
+    // Remove plain URLs from response
+    response = response.replace(/(?<!\]\()https?:\/\/[^\s<>]+/gi, '').trim()
   }
 
   const quickReplies: string[] = []
