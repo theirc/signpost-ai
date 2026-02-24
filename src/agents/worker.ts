@@ -251,6 +251,13 @@ export function buildWorker(w: WorkerConfig) {
         if (operator === "isNotEmpty") return value != ""
       }
 
+      if (type === "string[]") {
+        value ||= []
+        if (!Array.isArray(value)) value = [value]
+        if (operator === "isEmpty") return value.length == 0
+        if (operator === "isNotEmpty") return value.length > 0
+      }
+
       if (type === "number") {
         if (typeof value !== "number") value = Number(value)
         if (typeof conditionValue1 !== "number") conditionValue1 = Number(conditionValue1)

@@ -3,7 +3,6 @@ import { workerRegistry } from "./registry"
 import { buildWorker } from "./worker"
 import { ulid } from 'ulid'
 import { ApiWorker } from "./workers/api"
-import { z } from "zod"
 
 type LogTypes = "execution" | "error" | "info" | "handoff" | "tool_start" | "tool_end"
 
@@ -30,18 +29,25 @@ interface AgentLog {
   message?: string
   handles?: any
   parameters?: any
-
-
 }
 
 
 declare global {
   type AgentTypes = "conversational" | "data"
+
   interface AgentVersion {
     title?: string
     date?: number
     agent?: any
   }
+
+  interface HITLPayload {
+    integration?: {
+      telerivet?: TelerivetIntegrationPayload
+    }
+    causes?: string[]
+  }
+
 }
 
 
@@ -75,7 +81,7 @@ export function createAgent(config: AgentConfig) {
     workers,
     displayData: true,
 
-    state: {} as AgentParameters,
+    parameters: {} as AgentParameters,
     type: "data" as AgentTypes,
     debuguuid: config.debuguuid || "",
     description: "",
@@ -99,6 +105,23 @@ export function createAgent(config: AgentConfig) {
       }
       return null
     },
+
+    getHistoryWorker(): ChatHistoryWorker {
+      for (const key in workers) {
+        if (workers[key].config.type === "chatHistory") return workers[key] as ChatHistoryWorker
+      }
+      return null
+    },
+
+    getInputMessage(): string {
+      const inputWorker = agent.getInputWorker()
+      if (!inputWorker) return ""
+      const messageHandle = Object.values(inputWorker.handles).find((h) => h.direction === "output" && h.type === "string" && h.name === "message")
+      if (!messageHandle) return ""
+      return messageHandle.value as string || ""
+    },
+
+
     getEndAPIWorkers(p: AgentParameters) {
       const apiWorkers: ApiWorker[] = []
       for (const key in workers) {
@@ -132,7 +155,7 @@ export function createAgent(config: AgentConfig) {
     },
 
     reset() {
-      agent.state = {}
+      agent.parameters = {}
       agent.execution = ulid()
       for (const key in workers) {
         const w = workers[key]
@@ -145,24 +168,105 @@ export function createAgent(config: AgentConfig) {
       }
     },
 
+    async sendUserHITLMessage(hitlPayload: HITLPayload) {
+
+      try {
+
+        let { uid, team, state, integrationPayload } = agent.parameters
+
+        state.agent ||= {}
+        hitlPayload ||= {}
+        hitlPayload.causes ||= state.agent.hitl.causes || []
+        hitlPayload.integration = integrationPayload || {}
+
+        console.log(`Processing HITL for '${agent.title}`)
+
+        const message = (agent.parameters as any).input.message
+
+        if (message) {
+          console.log(`Saving message for '${agent.title} in HITL: ${message}'`)
+
+          const historyWorker = agent.getHistoryWorker()
+
+          if (historyWorker) await historyWorker.addMessageToHistory(uid, `${agent.id}`, team, "user", message)
+
+          await supabase.from("events").upsert({
+            id: uid,
+            agent: agent.id,
+            team,
+            message,
+            payload: hitlPayload as any
+          })
+          agent.currentWorker = null
+          agent.update()
+          return
+
+        } else {
+          console.log(`Message not found`)
+        }
+
+      } catch (error) {
+        await agent.log({ type: "error", message: error?.toString() || "Unknown error" })
+      }
+
+    },
+
+    async sendHumanHITLMessage(message: string, uid: string, team: string, endSession = false) {
+
+      if (!message) return
+
+      try {
+        console.log(`Saving Human message for '${agent.title} in HITL: ${message}'`)
+        const historyWorker = agent.getHistoryWorker()
+        if (historyWorker) await historyWorker.addMessageToHistory(uid, `${agent.id}`, team, "human", message)
+
+        if (endSession) {
+          const { data, error } = await supabase.from("states").select("*").eq("id", uid).single()
+          if (data && data.state) {
+            const state: AgentState = data.state as any
+            state.agent ||= {}
+            state.agent.hitl ||= {}
+            state.agent.hitl.active = false
+            delete state.agent.hitl.causes
+            await supabase.from("states").update({ state: state as any }).eq("id", uid)
+          }
+          await supabase.from("events").delete().eq("id", uid)
+        }
+
+
+      } catch (error) {
+        await agent.log({ type: "error", message: error?.toString() || "Unknown error" })
+      }
+
+    },
+
     async execute(p: AgentParameters) {
       agent.reset()
       p.input ||= {}
       p.output ||= {}
       p.apiKeys ||= {}
-      p.state ||= {
-        agent: {},
-        workers: {}
-      }
+      p.state ||= { agent: {}, workers: {} }
+      p.state.agent ||= {}
+      p.state.agent.hitl ||= {}
+      p.state.workers ||= {}
       p.team = config.team_id || ""
       p.logWriter ||= () => { }
       p.agent = agent
 
-      if (p.debug && agent.debuguuid && !p.uid) {
-        p.uid = agent.debuguuid
-      }
 
-      agent.state = p
+      //----- DEBUG PAYLOAD ------
+      // p.integrationPayload = {
+      //   telerivet: {
+      //     phone: "+542235212233",
+      //     name: "John Doe",
+      //     projectId: "1234567890"
+      //   }
+      // }
+      //-------------------------
+
+      if (p.debug && agent.debuguuid && !p.uid) p.uid = agent.debuguuid
+
+      agent.parameters = p
 
       for (const key in agent.workers) {
         const w = agent.workers[key]
@@ -171,7 +275,6 @@ export function createAgent(config: AgentConfig) {
       }
 
       const hasUid = !!p.uid
-      // const hasUid = p.uid && z.string().uuid().safeParse(p.uid).success
 
       if (hasUid) {
         const dbState = await supabase.from("states").select("*").eq("id", p.uid).single()
@@ -181,6 +284,16 @@ export function createAgent(config: AgentConfig) {
           p.state.agent ||= {}
           p.state.workers ||= {}
         }
+      }
+
+      if (hasUid && p.state.agent.hitl.active) {
+        await agent.sendUserHITLMessage({
+          causes: p.state.agent?.hitl.causes || [],
+          integration: p.integrationPayload || {}
+        })
+        agent.currentWorker = null
+        agent.update()
+        return
       }
 
       console.log(`Executing agent '${agent.title}'`)
@@ -210,6 +323,11 @@ export function createAgent(config: AgentConfig) {
         console.log(`Agent '${agent.title}' exeuted successfully`)
       }
 
+      if (hasUid && p.state.agent.hitl.active) await agent.sendUserHITLMessage({
+        causes: p.state.agent?.hitl.causes || [],
+        integration: p.integrationPayload || {}
+      })
+
       agent.currentWorker = null
       agent.update()
     },
@@ -220,9 +338,9 @@ export function createAgent(config: AgentConfig) {
           ...l,
           execution: agent.execution,
           agent: agent.id as any,
-          team_id: agent.state.team,
-          session: agent.state.session,
-          uid: agent.state.uid
+          team_id: agent.parameters.team,
+          session: agent.parameters.session,
+          uid: agent.parameters.uid
         } as any)
       } catch (error) {
         console.error("Error logging agent event:", error)
@@ -256,6 +374,7 @@ export function createAgent(config: AgentConfig) {
     async resetAgent(uid: string) {
       await supabase.from("states").delete().eq("id", uid)
       await supabase.from("history").delete().eq("uid", uid)
+      await supabase.from("events").delete().eq("id", uid)
     },
 
   }

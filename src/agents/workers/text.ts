@@ -7,19 +7,23 @@ declare global {
     },
     parameters: {
       text?: string
-      contentType?: "text" | "number" | "audio" | "image" | "file" | "Timestamp"
+      contentType?: "text" | "number" | "audio" | "image" | "file" | "Timestamp" | "boolean"
       contentUri?: string
       numberValue?: number
+      booleanValue?: boolean
     }
   }
 }
 
 async function execute(worker: TextWorker) {
-  const { contentType, text, contentUri, numberValue } = worker.parameters
+  const { contentType, text, contentUri, numberValue, booleanValue } = worker.parameters
 
   switch (contentType) {
     case "number":
       worker.fields.output.value = numberValue !== undefined ? numberValue : 0
+      break
+    case "boolean":
+      worker.fields.output.value = booleanValue !== undefined ? booleanValue : false
       break
     case "audio":
     case "image":

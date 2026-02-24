@@ -116,6 +116,14 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
       message: content,
       files,
     },
+    integrationPayload: {
+      telerivet: {
+        apiKey: apiKeys.telerivet,
+        name: r.contact.name,
+        phone: r.from_number,
+        projectId: r.project_id,
+      }
+    },
     apiKeys,
     uid,
   }
@@ -123,6 +131,12 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
   if (inputAudio) p.input.audio = inputAudio
   await a.execute(p)
   if (p.error) return `Agent Error: ${p.error}`
+
+
+  if (p.state && p.state.agent && p.state.agent.hitl && p.state.agent.hitl.active) {
+    // If HITL is active, we don't send a message back to the user, since a human will be responding.
+    return
+  }
 
   let { response, audio } = p.output || {}
 
