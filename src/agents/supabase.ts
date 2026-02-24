@@ -45,6 +45,8 @@ export type Database = {
           debuguuid: string | null
           description: string | null
           edges: Json | null
+          fork_base: Json | null
+          fork_id: string | null
           id: number
           status: string | null
           team_id: string | null
@@ -58,6 +60,8 @@ export type Database = {
           debuguuid?: string | null
           description?: string | null
           edges?: Json | null
+          fork_base?: Json | null
+          fork_id?: string | null
           id?: number
           status?: string | null
           team_id?: string | null
@@ -71,6 +75,8 @@ export type Database = {
           debuguuid?: string | null
           description?: string | null
           edges?: Json | null
+          fork_base?: Json | null
+          fork_id?: string | null
           id?: number
           status?: string | null
           team_id?: string | null
@@ -349,30 +355,104 @@ export type Database = {
       }
       eval_configs: {
         Row: {
+          agent: number | null
           config: Json
           created_at: string
+          day: number | null
+          fri: boolean | null
           id: string
+          last_error: string | null
+          max_retries: number | null
+          mon: boolean | null
           name: string | null
+          parameters: Json | null
+          priority: number | null
+          range: number | null
+          retry_count: number | null
+          sat: boolean | null
+          scheduled_at: string | null
+          status: string | null
+          sun: boolean | null
+          team: string | null
           team_id: string
+          thu: boolean | null
+          title: string | null
+          tue: boolean | null
+          type: number | null
           updated_at: string
+          wed: boolean | null
         }
         Insert: {
+          agent?: number | null
           config?: Json
           created_at?: string
+          day?: number | null
+          fri?: boolean | null
           id?: string
+          last_error?: string | null
+          max_retries?: number | null
+          mon?: boolean | null
           name?: string | null
+          parameters?: Json | null
+          priority?: number | null
+          range?: number | null
+          retry_count?: number | null
+          sat?: boolean | null
+          scheduled_at?: string | null
+          status?: string | null
+          sun?: boolean | null
+          team?: string | null
           team_id: string
+          thu?: boolean | null
+          title?: string | null
+          tue?: boolean | null
+          type?: number | null
           updated_at?: string
+          wed?: boolean | null
         }
         Update: {
+          agent?: number | null
           config?: Json
           created_at?: string
+          day?: number | null
+          fri?: boolean | null
           id?: string
+          last_error?: string | null
+          max_retries?: number | null
+          mon?: boolean | null
           name?: string | null
+          parameters?: Json | null
+          priority?: number | null
+          range?: number | null
+          retry_count?: number | null
+          sat?: boolean | null
+          scheduled_at?: string | null
+          status?: string | null
+          sun?: boolean | null
+          team?: string | null
           team_id?: string
+          thu?: boolean | null
+          title?: string | null
+          tue?: boolean | null
+          type?: number | null
           updated_at?: string
+          wed?: boolean | null
         }
         Relationships: [
+          {
+            foreignKeyName: "eval_configs_agent_fkey"
+            columns: ["agent"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "eval_configs_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "eval_configs_team_id_fkey"
             columns: ["team_id"]
@@ -388,6 +468,7 @@ export type Database = {
           eval_config_id: string
           id: string
           result: Json
+          starred_dashboard_fields: Json | null
           team_id: string
         }
         Insert: {
@@ -395,6 +476,7 @@ export type Database = {
           eval_config_id: string
           id?: string
           result?: Json
+          starred_dashboard_fields?: Json | null
           team_id: string
         }
         Update: {
@@ -402,6 +484,7 @@ export type Database = {
           eval_config_id?: string
           id?: string
           result?: Json
+          starred_dashboard_fields?: Json | null
           team_id?: string
         }
         Relationships: [
@@ -420,6 +503,68 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      events: {
+        Row: {
+          agent: number | null
+          created_at: string
+          id: string
+          message: string | null
+          payload: Json | null
+          team: string | null
+        }
+        Insert: {
+          agent?: number | null
+          created_at?: string
+          id: string
+          message?: string | null
+          payload?: Json | null
+          team?: string | null
+        }
+        Update: {
+          agent?: number | null
+          created_at?: string
+          id?: string
+          message?: string | null
+          payload?: Json | null
+          team?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      geospatial: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          team_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          team_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          team_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       history: {
         Row: {
@@ -878,6 +1023,9 @@ export type Database = {
           id: string
           last_updated: string | null
           name: string
+          sensitivity_classification: string | null
+          sensitivity_reason: string | null
+          sensitivity_review_flag: boolean | null
           tags: string[] | null
           team_id: string | null
           type: string | null
@@ -889,6 +1037,9 @@ export type Database = {
           id?: string
           last_updated?: string | null
           name: string
+          sensitivity_classification?: string | null
+          sensitivity_reason?: string | null
+          sensitivity_review_flag?: boolean | null
           tags?: string[] | null
           team_id?: string | null
           type?: string | null
@@ -900,6 +1051,9 @@ export type Database = {
           id?: string
           last_updated?: string | null
           name?: string
+          sensitivity_classification?: string | null
+          sensitivity_reason?: string | null
+          sensitivity_review_flag?: boolean | null
           tags?: string[] | null
           team_id?: string | null
           type?: string | null

@@ -19,6 +19,7 @@ declare global {
       output: NodeIO
     }
     saveHistory(worker: ChatHistoryWorker, p: AgentParameters, history: AgentInputItem[], searchContext?: string, inputTokens?: number, outputTokens?: number): Promise<void>
+    addMessageToHistory(uid: string, agent: string, team: string, role: 'user' | 'assistant' | "human", text: string): Promise<void>
 
   }
 }
@@ -150,6 +151,26 @@ async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, histor
 
 }
 
+async function addMessageToHistory(uid: string, agent: string, team: string, role: 'user' | 'assistant' | "human", text: string): Promise<void> {
+
+  if (!uid || !agent || !role || !text) return
+
+  const type = role == "user" ? "input_text" : "output_text"
+
+  const newItemsToSave = {
+    uid,
+    agent,
+    role,
+    type: "message",
+    team,
+    content: [{ text, type }],
+    payload: { role, type: "message", content: [{ text, type }] }
+  } satisfies HistoryItem
+
+  await supabase.from("history").insert(newItemsToSave)
+
+}
+
 
 
 export const chatHistory: WorkerRegistryItem = {
@@ -176,6 +197,7 @@ export const chatHistory: WorkerRegistryItem = {
       chatHistory
     ) as ChatHistoryWorker
     w.saveHistory = saveHistory
+    w.addMessageToHistory = addMessageToHistory
     return w
   },
   get registry() { return chatHistory },

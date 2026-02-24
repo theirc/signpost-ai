@@ -6,6 +6,27 @@ declare global {
   type Agent = ReturnType<typeof createAgent>
   type EdgeConnections = { [index: string]: { source: string, target: string, sourceHandle: string, targetHandle: string } }
 
+  interface IntegrationsPayload {
+    telerivet?: TelerivetIntegrationPayload
+  }
+
+  interface TelerivetIntegrationPayload {
+    phone?: string
+    name?: string
+    apiKey?: string
+    projectId?: string
+  }
+
+  interface AgentState {
+    agent: {
+      hitl?: {
+        active?: boolean
+        causes?: string[]
+      }
+    }
+    workers: { [key: string]: any }
+  }
+
   interface APIKeys {
     openai?: string
     anthropic?: string
@@ -33,10 +54,8 @@ declare global {
     apiKeys?: APIKeys
     team?: string
     session?: string
-    state?: {
-      agent: {}
-      workers: { [key: string]: any }
-    }
+    integrationPayload?: IntegrationsPayload
+    state?: AgentState
     logWriter?: (p: { worker: AIWorker, state: any }) => void
   }
 }

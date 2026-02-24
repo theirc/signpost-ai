@@ -26,6 +26,7 @@ import { vectorSearch } from "./workers/vectorsearch"
 import { onboard } from "./workers/onboard"
 import { lookup } from "./workers/lookup"
 import { languageDetection } from "./workers/languagedetection"
+import { hitl } from "./workers/hitl"
 
 
 type WorkerCategories = "io" | "generator" | "debug" | "tool"
@@ -81,5 +82,6 @@ export const workerRegistry = {
   onboard,
   lookup,
   languageDetection,
+  hitl,
 
 } satisfies { [index: string]: WorkerRegistryItem }
