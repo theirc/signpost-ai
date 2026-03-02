@@ -189,12 +189,13 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
 
   const to_number = r.from_number
   const api_key = apiKeys.telerivet
+  const route_id = r.integration?.route_id ?? null
 
   if (media_urls.length > 0) {
     console.log(`[Telerivet] Found ${media_urls.length} image(s)`)
     for (const url of media_urls) {
       // await sendMessage("", r.from_number, projectId, apiKeys.telerivet, [], url)
-      await sendMessage({ to_number, projectId, api_key, media_url: url })
+      await sendMessage({ to_number, projectId, api_key, media_url: url, route_id })
     }
   }
 
@@ -204,13 +205,13 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
     const parts = response.split("<break>").map((p: string) => p.trim()).filter(p => p.length > 0)
     for (let i = 0; i < parts.length - 1; i++) {
       // await sendMessage(parts[i], r.from_number, projectId, apiKeys.telerivet, [])
-      await sendMessage({ content: parts[i], to_number, projectId, api_key, })
+      await sendMessage({ content: parts[i], to_number, projectId, api_key, route_id })
     }
     // if (parts.length > 0) await sendMessage(parts[parts.length - 1], r.from_number, projectId, apiKeys.telerivet, quickReplies)
-    if (parts.length > 0) await sendMessage({ content: parts[parts.length - 1], to_number, projectId, api_key, quickReplies })
+    if (parts.length > 0) await sendMessage({ content: parts[parts.length - 1], to_number, projectId, api_key, quickReplies, route_id })
   } else {
     // await sendMessage(response, r.from_number, projectId, apiKeys.telerivet, quickReplies)
-    await sendMessage({ content: response, to_number, projectId, api_key, quickReplies })
+    await sendMessage({ content: response, to_number, projectId, api_key, quickReplies, route_id })
   }
 
 }
