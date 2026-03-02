@@ -7,9 +7,9 @@ import { agents } from './agents'
 import { supabase } from './agents/db'
 import { executeCronJobs } from './cron'
 import Exa from 'exa-js'
-import { telerivetHook } from './integrations/telerivet'
+import { telerivetHook, type TelerivetHookRequest } from './integrations/telerivet'
 
-const version = '2.0224.1800'
+const version = '2.0302.1438'
 
 const app = express()
 app.use(cors())
@@ -254,16 +254,18 @@ app.post('/exa', async (req, res) => {
 
 app.post('/integrations/:provider/:agent', async (req, res) => {
   const { provider, agent } = req.params
-  const body = req.body
+  const body: TelerivetHookRequest = req.body
   res.end()
 
   if (!provider || !agent || !body) return
 
-  const useDebug = !!req.query.debug
+  body.integration = {}
+  body.integration.useDebug = !!req.query.debug
+  body.integration.route_id = req.query.route_id as string || null
 
   try {
     if (provider === "telerivet") {
-      await telerivetHook(body, Number(agent), useDebug)
+      await telerivetHook(body, Number(agent))
     }
   } catch (error) {
     console.error(`Error Executing Telerivet Integration ${error}`)

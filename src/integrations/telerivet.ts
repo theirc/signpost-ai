@@ -8,7 +8,7 @@ import { ulid } from "ulid"
 const MAX_QUICK_REPLY_LENGTH = 20
 const MAX_QUICK_REPLIES_PER_MESSAGE = 3
 
-export async function telerivetHook(r: TelerivetHookRequest, agent: number, debug = false) {
+export async function telerivetHook(r: TelerivetHookRequest, agent: number) {
 
   let error: string
 
@@ -20,7 +20,7 @@ export async function telerivetHook(r: TelerivetHookRequest, agent: number, debu
 
   console.log(`Telerivet: ${error ? error : "No incidents recorded."}`)
 
-  if (debug && error) {
+  if (r.integration && r.integration.useDebug && error) {
     try {
       tryToNotifiyError(error, r, agent)
     } catch (error) {
@@ -44,7 +44,8 @@ async function tryToNotifiyError(error: string, r: TelerivetHookRequest, agent: 
     return acc
   }, {}) || {}
 
-  await sendMessage(error, r.from_number, r.project_id, apiKeys.telerivet, [])
+  // await sendMessage(error, r.from_number, r.project_id, apiKeys.telerivet, [])
+  await sendMessage({ content: error, to_number: r.from_number, projectId: r.project_id, api_key: apiKeys.telerivet })
 
 }
 
@@ -107,7 +108,8 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
 
   if (content == "/reset") {
     await a.resetAgent(uid)
-    await sendMessage("The chat history has been reset.", r.from_number, projectId, apiKeys.telerivet, [])
+    // await sendMessage("The chat history has been reset.", r.from_number, projectId, apiKeys.telerivet, [])
+    await sendMessage({ content: "The chat history has been reset.", to_number: r.from_number, projectId, api_key: apiKeys.telerivet })
     return
   }
 
@@ -146,22 +148,24 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
 
   // Extract all image URLs from response (both markdown and plain URLs)
   if (response) {
+    const allowedExt = /\.(jpg|jpeg|png|pdf|doc|docx|ogg|mp4)(\?[^\)\s]*)?$/i
+
     // First, extract markdown file URLs: ![alt](url) or [text](url)
     const markdownFileRegex = /!?\[.*?\]\((https?:\/\/[^\)\s]+)\)/gi
     let match
     while ((match = markdownFileRegex.exec(response)) !== null) {
-      media_urls.push(match[1])
+      if (allowedExt.test(match[1])) media_urls.push(match[1])
     }
-    // Remove markdown links/images from response
-    response = response.replace(/!?\[.*?\]\(https?:\/\/[^\)\s]+\)/gi, '').trim()
+    // Remove only markdown links/images that are supported file types from response
+    response = response.replace(/!?\[.*?\]\((https?:\/\/[^\)\s]+)\)/gi, (full, url) => allowedExt.test(url) ? '' : full).trim()
 
     // Then, extract plain URLs (not in markdown format)
     const plainFileRegex = /(?<!\]\()https?:\/\/[^\s<>]+/gi
     while ((match = plainFileRegex.exec(response)) !== null) {
-      media_urls.push(match[0])
+      if (allowedExt.test(match[0])) media_urls.push(match[0])
     }
-    // Remove plain URLs from response
-    response = response.replace(/(?<!\]\()https?:\/\/[^\s<>]+/gi, '').trim()
+    // Remove only plain URLs that are supported file types from response
+    response = response.replace(/(?<!\]\()https?:\/\/[^\s<>]+/gi, (url) => allowedExt.test(url) ? '' : url).trim()
   }
 
   const quickReplies: string[] = []
@@ -183,10 +187,14 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
     media_urls.push(data.publicUrl)
   }
 
+  const to_number = r.from_number
+  const api_key = apiKeys.telerivet
+
   if (media_urls.length > 0) {
     console.log(`[Telerivet] Found ${media_urls.length} image(s)`)
     for (const url of media_urls) {
-      await sendMessage("", r.from_number, projectId, apiKeys.telerivet, [], url)
+      // await sendMessage("", r.from_number, projectId, apiKeys.telerivet, [], url)
+      await sendMessage({ to_number, projectId, api_key, media_url: url })
     }
   }
 
@@ -195,17 +203,32 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
   if (response.includes("<break>")) {
     const parts = response.split("<break>").map((p: string) => p.trim()).filter(p => p.length > 0)
     for (let i = 0; i < parts.length - 1; i++) {
-      await sendMessage(parts[i], r.from_number, projectId, apiKeys.telerivet, [])
+      // await sendMessage(parts[i], r.from_number, projectId, apiKeys.telerivet, [])
+      await sendMessage({ content: parts[i], to_number, projectId, api_key, })
     }
-    if (parts.length > 0) await sendMessage(parts[parts.length - 1], r.from_number, projectId, apiKeys.telerivet, quickReplies)
+    // if (parts.length > 0) await sendMessage(parts[parts.length - 1], r.from_number, projectId, apiKeys.telerivet, quickReplies)
+    if (parts.length > 0) await sendMessage({ content: parts[parts.length - 1], to_number, projectId, api_key, quickReplies })
   } else {
-    await sendMessage(response, r.from_number, projectId, apiKeys.telerivet, quickReplies)
+    // await sendMessage(response, r.from_number, projectId, apiKeys.telerivet, quickReplies)
+    await sendMessage({ content: response, to_number, projectId, api_key, quickReplies })
   }
 
 }
 
+interface SendMessageParameters {
+  content?: string
+  to_number?: string
+  projectId?: string
+  api_key?: string
+  quickReplies?: string[]
+  media_url?: string
+  route_id?: string
+}
 
-async function sendMessage(content: string, to_number: string, projectId: string, api_key: string, quickReplies: string[], media_url?: string) {
+//async function sendMessage(content: string, to_number: string, projectId: string, api_key: string, quickReplies: string[], media_url?: string) {
+async function sendMessage(p: SendMessageParameters) {
+
+  const { content, to_number, projectId, api_key, quickReplies, media_url, route_id } = p
 
   if (!content && !media_url) return
 
@@ -219,6 +242,7 @@ async function sendMessage(content: string, to_number: string, projectId: string
   }
 
   if (media_url) payload.media_urls = [media_url]
+  if (route_id) payload.route_id = route_id
 
   if (quickReplies && quickReplies.length > 0) {
 
@@ -272,15 +296,20 @@ function decode(encoded: string): string {
 }
 
 
-interface TelerivetHookRequest {
+//Minimum required Interface. The other one shows everything
+export interface TelerivetHookRequest {
   content?: string // "hola" - Con un audio esto viene vacio
   media?: TelerivetMedia[]
   time_created: string // "1769712063"
   from_number: string // "5492235...."
+  integration?: {
+    useDebug?: boolean
+    route_id?: string
+  }
 }
 
 
-interface TelerivetHookRequest {
+export interface TelerivetHookRequest {
   context: string // "message"
   event: "incoming_message"
   message_type: string // "chat"
