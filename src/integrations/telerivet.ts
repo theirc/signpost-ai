@@ -122,6 +122,7 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
       name: r.contact.name,
       phone: r.from_number,
       projectId: r.project_id,
+      type: "telerivet",
     },
     apiKeys,
     uid,
