@@ -107,6 +107,7 @@ async function execute(worker: VectorSearchWorker, { apiKeys, team }: AgentParam
       sources: s.sources,
       url: s.url,
       team,
+      baseUrl: s.baseUrl,
     }
 
     const docs = await doVectorSearch(r)

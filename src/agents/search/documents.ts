@@ -12,6 +12,7 @@ declare global {
     distance?: number
     results?: number
     url?: string
+    baseUrl?: string
   }
 }
 

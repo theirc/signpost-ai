@@ -1,4 +1,4 @@
-import { AgentInputItem, FunctionTool, Agent as OpenAIAgent, run, tool, user, webSearchTool } from '@openai/agents'
+import { AgentInputItem, FunctionTool, Agent as OpenAIAgent, run, tool, user, webSearchTool, RunToolCallItem, RunToolCallOutputItem } from '@openai/agents'
 import { aisdk } from '@openai/agents-extensions'
 import { createModel } from '../utils'
 
@@ -45,12 +45,19 @@ interface InvokeModelParams {
   logAgent: { log: (data: any) => void }
 }
 
+interface ToolCallDetail {
+  name: string
+  arguments: string
+  result: string
+}
+
 interface InvokeModelResult {
   finalOutput: string
   history: AgentInputItem[]
   inputTokens: number
   outputTokens: number
   searchContext: string
+  toolCalls: ToolCallDetail[]
 }
 
 async function invokeModel(params: InvokeModelParams): Promise<InvokeModelResult> {
@@ -95,12 +102,39 @@ async function invokeModel(params: InvokeModelParams): Promise<InvokeModelResult
     outputTokens = state._context.usage.outputTokens || 0
   }
 
+  const toolCalls: ToolCallDetail[] = []
+  const pendingCalls = new Map<string, ToolCallDetail>()
+
+  for (const item of result.newItems) {
+    if (item instanceof RunToolCallItem) {
+      const raw = item.rawItem as any
+      if (raw.type === "function_call") {
+        const detail: ToolCallDetail = {
+          name: raw.name || "unknown",
+          arguments: raw.arguments || "{}",
+          result: "",
+        }
+        pendingCalls.set(raw.callId, detail)
+        toolCalls.push(detail)
+      }
+    } else if (item instanceof RunToolCallOutputItem) {
+      const raw = item.rawItem as any
+      if (raw.type === "function_call_result" && raw.callId) {
+        const pending = pendingCalls.get(raw.callId)
+        if (pending) {
+          pending.result = typeof raw.output === "string" ? raw.output : JSON.stringify(raw.output)
+        }
+      }
+    }
+  }
+
   return {
     finalOutput: result.finalOutput,
     history: result.history,
     inputTokens,
     outputTokens,
     searchContext,
+    toolCalls,
   }
 }
 
@@ -207,6 +241,15 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
   }
 
   worker.fields.output.value = result.finalOutput
+
+  if (result.toolCalls.length > 0) {
+    p.agent.toolCallNodes = result.toolCalls.map((tc) => ({
+      name: tc.name,
+      arguments: tc.arguments,
+      result: tc.result,
+      sourceWorkerId: worker.id,
+    }))
+  }
 
 }
 

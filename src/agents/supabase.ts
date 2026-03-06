@@ -324,6 +324,44 @@ export type Database = {
           },
         ]
       }
+      contacts: {
+        Row: {
+          avatar: string | null
+          created_at: string
+          data: string | null
+          id: string
+          name: string | null
+          team: string | null
+          type: string | null
+        }
+        Insert: {
+          avatar?: string | null
+          created_at?: string
+          data?: string | null
+          id: string
+          name?: string | null
+          team?: string | null
+          type?: string | null
+        }
+        Update: {
+          avatar?: string | null
+          created_at?: string
+          data?: string | null
+          id?: string
+          name?: string | null
+          team?: string | null
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contacts_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       domains: {
         Row: {
           created_at: string
@@ -847,6 +885,61 @@ export type Database = {
         }
         Relationships: []
       }
+      messages: {
+        Row: {
+          agent: number | null
+          channel: string | null
+          contact: string | null
+          created_at: string
+          id: string
+          message: string | null
+          role: string | null
+          team: string | null
+        }
+        Insert: {
+          agent?: number | null
+          channel?: string | null
+          contact?: string | null
+          created_at?: string
+          id?: string
+          message?: string | null
+          role?: string | null
+          team?: string | null
+        }
+        Update: {
+          agent?: number | null
+          channel?: string | null
+          contact?: string | null
+          created_at?: string
+          id?: string
+          message?: string | null
+          role?: string | null
+          team?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_agent_fkey"
+            columns: ["agent"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_contact_fkey"
+            columns: ["contact"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       models: {
         Row: {
           created_at: string | null
@@ -1075,7 +1168,7 @@ export type Database = {
           state: Json | null
         }
         Insert: {
-          id?: string
+          id: string
           state?: Json | null
         }
         Update: {

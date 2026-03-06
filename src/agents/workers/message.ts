@@ -570,6 +570,7 @@ export const message: WorkerRegistryItem = {
   title: "Send Message",
   category: "tool",
   type: "message",
+  deprecated: true,
   description: "Sends messages via various integration channels (Telerivet, Twilio coming soon)",
   execute,
   create,

@@ -93,6 +93,7 @@ export const handoffAgent: WorkerRegistryItem = {
   execute,
   category: "generator",
   type: "handoffAgent",
+  deprecated: true,
   description: "Specialized agent worker for handling handoffs and routing.",
   create(agent: Agent) {
 
