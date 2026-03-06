@@ -327,6 +327,7 @@ export type Database = {
       contacts: {
         Row: {
           avatar: string | null
+          code: string | null
           created_at: string
           data: string | null
           id: string
@@ -336,6 +337,7 @@ export type Database = {
         }
         Insert: {
           avatar?: string | null
+          code?: string | null
           created_at?: string
           data?: string | null
           id: string
@@ -345,6 +347,7 @@ export type Database = {
         }
         Update: {
           avatar?: string | null
+          code?: string | null
           created_at?: string
           data?: string | null
           id?: string
@@ -894,6 +897,7 @@ export type Database = {
           id: string
           message: string | null
           role: string | null
+          sender: string | null
           team: string | null
         }
         Insert: {
@@ -904,6 +908,7 @@ export type Database = {
           id?: string
           message?: string | null
           role?: string | null
+          sender?: string | null
           team?: string | null
         }
         Update: {
@@ -914,6 +919,7 @@ export type Database = {
           id?: string
           message?: string | null
           role?: string | null
+          sender?: string | null
           team?: string | null
         }
         Relationships: [
@@ -927,6 +933,13 @@ export type Database = {
           {
             foreignKeyName: "messages_contact_fkey"
             columns: ["contact"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_sender_fkey"
+            columns: ["sender"]
             isOneToOne: false
             referencedRelation: "contacts"
             referencedColumns: ["id"]

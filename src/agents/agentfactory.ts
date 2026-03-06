@@ -300,16 +300,20 @@ export function createAgent(config: AgentConfig) {
 
       // ───── Message and Contact ────────────────────────────────────────
 
-      if (p.integration && p.apiKeys && p.apiKeys.codec && message) {
-        p.integration.contact = await integrations.saveMessage({
-          integration: p.integration,
-          password: p.apiKeys.codec,
-          contact: p.integration.contact,
-          team: p.team,
-          role: "user",
-          message,
-          agent: agent.id
-        })
+      try {
+        if (p.integration && p.apiKeys && p.apiKeys.codec && message) {
+          p.integration.contact = await integrations.saveMessage({
+            integration: p.integration,
+            password: p.apiKeys.codec,
+            contact: p.integration.contact,
+            team: p.team,
+            role: "user",
+            message,
+            agent: agent.id
+          })
+        }
+      } catch (error) {
+        console.error("Error saving integration contact:", error)
       }
 
       // ───── HITL ───────────────────────────────────────────────────────
@@ -360,17 +364,21 @@ export function createAgent(config: AgentConfig) {
 
       // ───── Message and Contact ────────────────────────────────────────
 
-      if (p.integration && p.integration.contact && p.apiKeys && p.apiKeys.codec && p.output?.response) {
+      try {
+        if (p.integration && p.integration.contact && p.apiKeys && p.apiKeys.codec && p.output?.response) {
 
-        await integrations.saveMessage({
-          integration: p.integration,
-          password: p.apiKeys.codec,
-          contact: p.integration.contact,
-          team: p.team,
-          role: "assistant",
-          message: p.output?.response,
-          agent: agent.id
-        })
+          await integrations.saveMessage({
+            integration: p.integration,
+            password: p.apiKeys.codec,
+            contact: p.integration.contact,
+            team: p.team,
+            role: "assistant",
+            message: p.output?.response,
+            agent: agent.id
+          })
+        }
+      } catch (err) {
+        console.error("Error saving integration contact:", err)
       }
 
       // ───── End ───────────────────────────────────────────────────────

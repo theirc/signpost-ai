@@ -12,6 +12,15 @@ interface MessageParamters {
   team?: string
 }
 
+export function parsePhone(input: string): { digits: string | null, countryCode: string | null } {
+  if (!input) return { digits: null, countryCode: null }
+  const digits = input.replace(/\D/g, '')
+  if (!digits) return { digits: null, countryCode: null }
+  const match = input.match(/^\+?(\d{1,3})/)
+  const countryCode = match ? match[1].padStart(3, '0') : null
+  return { digits, countryCode }
+}
+
 export async function saveMessage({ integration, password, contact, team, role, message, agent }: MessageParamters): Promise<string> {
 
   if (!message) return
@@ -22,7 +31,13 @@ export async function saveMessage({ integration, password, contact, team, role, 
 
     if (!existingContact) {
 
-      if (integration.type === "telerivet") contact = await codec.encrypt(integration.phone, password)
+      let code = null
+
+      if (integration.type === "telerivet") {
+        const { digits, countryCode } = parsePhone(integration.phone)
+        contact = await codec.encrypt(digits || integration.phone, password)
+        code = countryCode
+      }
 
       const data = await codec.encrypt(JSON.stringify({
         name: integration.name,
@@ -38,6 +53,7 @@ export async function saveMessage({ integration, password, contact, team, role, 
         team,
         name: faker.person.fullName({ sex }),
         avatar: faker.image.personPortrait({ size: 128, sex }),
+        code,
       })
     }
   }
