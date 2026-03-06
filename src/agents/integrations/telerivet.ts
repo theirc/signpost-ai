@@ -1,7 +1,7 @@
 import axios from "axios"
 import { isBrowser } from "../isbrowser"
 
-async function sendMessage(content: string, intPayload: TelerivetIntegrationPayload) {
+async function sendMessage(content: string, intPayload: IntegrationPayload) {
 
   const { phone: destination, apiKey: api_key, projectId } = intPayload
   if (!content) return

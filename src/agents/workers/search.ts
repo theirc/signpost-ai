@@ -335,6 +335,7 @@ export const search: WorkerRegistryItem = {
   execute,
   category: "tool",
   type: "search",
+  deprecated: true,
   description: "This worker allows you to search for information in the knowledge base",
   create(agent: Agent) {
     const w = agent.initializeWorker(

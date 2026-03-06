@@ -197,7 +197,7 @@ async function getArts(url: string, limit?: number): Promise<ZendeskArticle[]> {
   return arts
 }
 
-async function search({ query, domain, limit = 10, keys }: VectorSerach): Promise<VectorDocument[]> {
+async function search({ query, domain, limit = 10, keys, baseUrl }: VectorSerach): Promise<VectorDocument[]> {
 
   if (!query) return []
   if (!domain) throw new Error("Domain is required")
@@ -223,12 +223,14 @@ async function search({ query, domain, limit = 10, keys }: VectorSerach): Promis
 
   const turndownService = new turndown.default()
 
+  if (baseUrl && baseUrl.endsWith("/")) baseUrl = baseUrl.substring(0, baseUrl.length - 1)
+
 
   const results = pages.map((item) => {
     const v: VectorDocument = {
       body: turndownService.turndown(item.body),
       title: item.name || item.title,
-      source: item.html_url,
+      source: baseUrl ? `${baseUrl}/${item.id}` : item.html_url,
       locale: item.locale,
       ref: `${item.id}`,
       origin: "zendesk",

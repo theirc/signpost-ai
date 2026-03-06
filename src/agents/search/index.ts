@@ -23,6 +23,7 @@ declare global {
     chunked?: boolean
     url?: string
     team?: string
+    baseUrl?: string
   }
 
 }

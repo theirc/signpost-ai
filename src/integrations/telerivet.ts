@@ -44,7 +44,6 @@ async function tryToNotifiyError(error: string, r: TelerivetHookRequest, agent: 
     return acc
   }, {}) || {}
 
-  // await sendMessage(error, r.from_number, r.project_id, apiKeys.telerivet, [])
   await sendMessage({ content: error, to_number: r.from_number, projectId: r.project_id, api_key: apiKeys.telerivet })
 
 }
@@ -107,24 +106,22 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
   const projectId = r.project_id
 
   if (content == "/reset") {
-    await a.resetAgent(uid)
-    // await sendMessage("The chat history has been reset.", r.from_number, projectId, apiKeys.telerivet, [])
+    await a.resetAgent(uid, team)
     await sendMessage({ content: "The chat history has been reset.", to_number: r.from_number, projectId, api_key: apiKeys.telerivet })
     return
   }
+
 
   const p: AgentParameters = {
     input: {
       message: content,
       files,
     },
-    integrationPayload: {
-      telerivet: {
-        apiKey: apiKeys.telerivet,
-        name: r.contact.name,
-        phone: r.from_number,
-        projectId: r.project_id,
-      }
+    integration: {
+      apiKey: apiKeys.telerivet,
+      name: r.contact.name,
+      phone: r.from_number,
+      projectId: r.project_id,
     },
     apiKeys,
     uid,
@@ -194,7 +191,6 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
   if (media_urls.length > 0) {
     console.log(`[Telerivet] Found ${media_urls.length} image(s)`)
     for (const url of media_urls) {
-      // await sendMessage("", r.from_number, projectId, apiKeys.telerivet, [], url)
       await sendMessage({ to_number, projectId, api_key, media_url: url, route_id })
     }
   }
@@ -204,13 +200,10 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
   if (response.includes("<break>")) {
     const parts = response.split("<break>").map((p: string) => p.trim()).filter(p => p.length > 0)
     for (let i = 0; i < parts.length - 1; i++) {
-      // await sendMessage(parts[i], r.from_number, projectId, apiKeys.telerivet, [])
       await sendMessage({ content: parts[i], to_number, projectId, api_key, route_id })
     }
-    // if (parts.length > 0) await sendMessage(parts[parts.length - 1], r.from_number, projectId, apiKeys.telerivet, quickReplies)
     if (parts.length > 0) await sendMessage({ content: parts[parts.length - 1], to_number, projectId, api_key, quickReplies, route_id })
   } else {
-    // await sendMessage(response, r.from_number, projectId, apiKeys.telerivet, quickReplies)
     await sendMessage({ content: response, to_number, projectId, api_key, quickReplies, route_id })
   }
 

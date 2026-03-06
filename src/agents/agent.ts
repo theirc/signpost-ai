@@ -1,4 +1,5 @@
-import { createAgent, configureAgent, loadAgent, saveAgent } from "./agentfactory"
+import { createAgent, configureAgent, loadAgent, saveAgent, forkAgent, mergeAgentIntoOriginal } from "./agentfactory"
+
 
 declare global {
 
@@ -6,13 +7,15 @@ declare global {
   type Agent = ReturnType<typeof createAgent>
   type EdgeConnections = { [index: string]: { source: string, target: string, sourceHandle: string, targetHandle: string } }
 
-  interface IntegrationsPayload {
-    telerivet?: TelerivetIntegrationPayload
-  }
+  type IntegrationsTypes = "telerivet" | "app"
 
-  interface TelerivetIntegrationPayload {
-    phone?: string
+  interface IntegrationPayload {
+    contact?: string //cross channel unique user id. If empty is created based on the integration.
+    type?: IntegrationsTypes
     name?: string
+    phone?: string
+
+    //Telerivet
     apiKey?: string
     projectId?: string
   }
@@ -42,6 +45,7 @@ declare global {
     youtube?: string
     rescuenet?: string
     telerivet?: string
+    codec?: string
   }
 
   interface AgentParameters {
@@ -54,7 +58,7 @@ declare global {
     apiKeys?: APIKeys
     team?: string
     session?: string
-    integrationPayload?: IntegrationsPayload
+    integration?: IntegrationPayload
     state?: AgentState
     logWriter?: (p: { worker: AIWorker, state: any }) => void
   }
@@ -65,5 +69,7 @@ export const agents = {
   configureAgent,
   saveAgent,
   loadAgent,
+  forkAgent,
+  mergeAgentIntoOriginal,
 }
 

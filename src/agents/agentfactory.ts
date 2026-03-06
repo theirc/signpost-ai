@@ -17,6 +17,18 @@ interface AgentConfig {
   team_id?: string
   debuguuid?: string
   versions?: AgentVersion[]
+  fork_id?: number | string | null
+  fork_base?: AgentConfig | null
+}
+
+interface MergeResult {
+  originalId: number
+  conflicts: {
+    workers: string[]
+    edges: string[]
+    fields: string[]
+  }
+  hasConflicts: boolean
 }
 
 interface AgentLog {
@@ -43,9 +55,7 @@ declare global {
   }
 
   interface HITLPayload {
-    integration?: {
-      telerivet?: TelerivetIntegrationPayload
-    }
+    integration?: IntegrationPayload
     causes?: string[]
   }
 
@@ -85,14 +95,17 @@ export function createAgent(config: AgentConfig) {
     parameters: {} as AgentParameters,
     type: "data" as AgentTypes,
     debuguuid: config.debuguuid || "",
+    fork_id: (config.fork_id ?? null) as number | string | null,
     description: "",
     currentWorker: null as AIWorker,
     versions: [] as AgentVersion[],
     execution: null as string,
+    toolCallNodes: [] as { name: string; arguments: string; result: string; sourceWorkerId: string }[],
 
     update() {
       //Used to update the UI in front end
     },
+
     updateWorkers() {
       for (const key in workers) {
         const w = workers[key]
@@ -113,15 +126,6 @@ export function createAgent(config: AgentConfig) {
       }
       return null
     },
-
-    getInputMessage(): string {
-      const inputWorker = agent.getInputWorker()
-      if (!inputWorker) return ""
-      const messageHandle = Object.values(inputWorker.handles).find((h) => h.direction === "output" && h.type === "string" && h.name === "message")
-      if (!messageHandle) return ""
-      return messageHandle.value as string || ""
-    },
-
 
     getEndAPIWorkers(p: AgentParameters) {
       const apiWorkers: ApiWorker[] = []
@@ -158,6 +162,7 @@ export function createAgent(config: AgentConfig) {
     reset() {
       agent.parameters = {}
       agent.execution = ulid()
+      agent.toolCallNodes = []
       for (const key in workers) {
         const w = workers[key]
         w.executed = false
@@ -173,7 +178,7 @@ export function createAgent(config: AgentConfig) {
 
       try {
 
-        let { uid, team, state, integrationPayload } = agent.parameters
+        let { uid, team, state, integration: integrationPayload } = agent.parameters
 
         state.agent ||= {}
         hitlPayload ||= {}
@@ -212,7 +217,7 @@ export function createAgent(config: AgentConfig) {
 
     },
 
-    async sendHumanHITLMessage(message: string, uid: string, team: string, endSession: boolean, integrationPayload: IntegrationsPayload) {
+    async sendHumanHITLMessage(message: string, uid: string, team: string, endSession: boolean, integrationPayload: IntegrationPayload) {
 
       if (!message) return
 
@@ -221,7 +226,7 @@ export function createAgent(config: AgentConfig) {
         const historyWorker = agent.getHistoryWorker()
         if (historyWorker) await historyWorker.addMessageToHistory(uid, `${agent.id}`, team, "human", message)
 
-        if (integrationPayload?.telerivet) await integrations.telerivet.sendMessage(message, integrationPayload.telerivet)
+        if (integrationPayload?.type === "telerivet") await integrations.telerivet.sendMessage(message, integrationPayload)
 
         if (endSession) {
           const { data, error } = await supabase.from("states").select("*").eq("id", uid).single()
@@ -240,10 +245,12 @@ export function createAgent(config: AgentConfig) {
       } catch (error) {
         await agent.log({ type: "error", message: error?.toString() || "Unknown error" })
       }
-
     },
 
     async execute(p: AgentParameters) {
+
+      // ───── Intialization ───────────────────────────────────────────────────────
+
       agent.reset()
       p.input ||= {}
       p.output ||= {}
@@ -255,27 +262,29 @@ export function createAgent(config: AgentConfig) {
       p.team = config.team_id || ""
       p.logWriter ||= () => { }
       p.agent = agent
+      p.integration ||= {}
+      const message: string = p.input.message
 
-
-      //----- DEBUG PAYLOAD ------
-      // p.integrationPayload = {
-      //   telerivet: {
-      //     phone: "+542235212233",
-      //     name: "John Doe",
-      //     projectId: "1234567890"
-      //   }
-      // }
-      //-------------------------
 
       if (p.debug && agent.debuguuid && !p.uid) p.uid = agent.debuguuid
-
       agent.parameters = p
+
+
+      if (message && message.trim().toLowerCase() === "/reset") {
+        agent.resetAgent(p.uid, p.team)
+        p.output.response = "The chat history and state has been reset."
+        agent.currentWorker = null
+        agent.update()
+        return
+      }
 
       for (const key in agent.workers) {
         const w = agent.workers[key]
         w.agent = agent
         w.executed = false
       }
+
+      // ───── State ───────────────────────────────────────────────────────
 
       const hasUid = !!p.uid
 
@@ -289,15 +298,37 @@ export function createAgent(config: AgentConfig) {
         }
       }
 
+      // ───── Message and Contact ────────────────────────────────────────
+
+      try {
+        if (p.integration && p.apiKeys && p.apiKeys.codec && message) {
+          p.integration.contact = await integrations.saveMessage({
+            integration: p.integration,
+            password: p.apiKeys.codec,
+            contact: p.integration.contact,
+            team: p.team,
+            role: "user",
+            message,
+            agent: agent.id
+          })
+        }
+      } catch (error) {
+        console.error("Error saving integration contact:", error)
+      }
+
+      // ───── HITL ───────────────────────────────────────────────────────
+
       if (hasUid && p.state?.agent?.hitl?.active) {
         await agent.sendUserHITLMessage({
           causes: p.state.agent?.hitl.causes || [],
-          integration: p.integrationPayload || {}
+          integration: p.integration || {}
         })
         agent.currentWorker = null
         agent.update()
         return
       }
+
+      // ───── Execution ───────────────────────────────────────────────────────
 
       console.log(`Executing agent '${agent.title}'`)
 
@@ -320,19 +351,46 @@ export function createAgent(config: AgentConfig) {
         p.error = error.toString()
       }
 
+      // ───── Errors ───────────────────────────────────────────────────────
+
       if (p?.error) {
         console.error(`Agent '${agent.title}' exeuted with error: ${p.error}`)
-      } else {
-        console.log(`Agent '${agent.title}' exeuted successfully`)
+        agent.currentWorker = null
+        agent.update()
+        return
       }
+
+      console.log(`Agent '${agent.title}' exeuted successfully`)
+
+      // ───── Message and Contact ────────────────────────────────────────
+
+      try {
+        if (p.integration && p.integration.contact && p.apiKeys && p.apiKeys.codec && p.output?.response) {
+
+          await integrations.saveMessage({
+            integration: p.integration,
+            password: p.apiKeys.codec,
+            contact: p.integration.contact,
+            team: p.team,
+            role: "assistant",
+            message: p.output?.response,
+            agent: agent.id
+          })
+        }
+      } catch (err) {
+        console.error("Error saving integration contact:", err)
+      }
+
+      // ───── End ───────────────────────────────────────────────────────
 
       if (hasUid && p.state?.agent?.hitl?.active) await agent.sendUserHITLMessage({
         causes: p.state?.agent?.hitl?.causes || [],
-        integration: p.integrationPayload || {}
+        integration: p.integration || {}
       })
 
       agent.currentWorker = null
       agent.update()
+
     },
 
     async log(l: AgentLog) {
@@ -374,10 +432,10 @@ export function createAgent(config: AgentConfig) {
       delete workers[id]
     },
 
-    async resetAgent(uid: string) {
+    async resetAgent(uid: string, team: string) {
       await supabase.from("states").delete().eq("id", uid)
-      await supabase.from("history").delete().eq("uid", uid)
-      await supabase.from("events").delete().eq("id", uid)
+      await supabase.from("history").delete().eq("uid", uid).eq("team", team)
+      await supabase.from("events").delete().eq("id", uid).eq("team", team)
     },
 
   }
@@ -530,6 +588,247 @@ export async function saveAgent(agent: Agent, team_id?: string) {
 
   return agent
 
+}
+
+export async function forkAgent(agent: Agent, team_id: string): Promise<Agent> {
+  const agentData = getAgentToSave(agent, team_id)
+
+  const forkedAgentData = {
+    ...agentData,
+    title: `Fork of ${agent.title || 'Untitled'}`,
+    fork_id: agent.id,
+    debuguuid: crypto.randomUUID(),
+    versions: [],
+    fork_base: JSON.parse(JSON.stringify(agentData)),
+  }
+
+  const { data, error } = await supabase
+    .from("agents")
+    .insert(forkedAgentData as any)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to fork agent: ${error.message}`)
+  }
+
+  const forkedAgent = configureAgent(data as any)
+  return forkedAgent
+}
+
+function stableStringify(obj: unknown): string {
+  if (obj === null || obj === undefined) return JSON.stringify(obj)
+  if (Array.isArray(obj)) return "[" + obj.map(stableStringify).join(",") + "]"
+  if (typeof obj === "object") {
+    const keys = Object.keys(obj as Record<string, unknown>).sort()
+    return "{" + keys.map(k => JSON.stringify(k) + ":" + stableStringify((obj as Record<string, unknown>)[k])).join(",") + "}"
+  }
+  return JSON.stringify(obj)
+}
+
+function deepEqual(a: unknown, b: unknown): boolean {
+  return stableStringify(a) === stableStringify(b)
+}
+
+function workersListToMap(workers: WorkerConfig[]): Record<string, WorkerConfig> {
+  const map: Record<string, WorkerConfig> = {}
+  for (const w of workers) {
+    if (w.id) map[w.id] = w
+  }
+  return map
+}
+
+function workersMapToList(workersMap: Record<string, WorkerConfig>): WorkerConfig[] {
+  return Object.values(workersMap)
+}
+
+function threeWayMergeMap(
+  base: Record<string, unknown>,
+  current: Record<string, unknown>,
+  incoming: Record<string, unknown>
+): { merged: Record<string, unknown>, conflicts: string[] } {
+  const merged: Record<string, unknown> = {}
+  const conflicts: string[] = []
+  const allKeys = new Set([...Object.keys(base), ...Object.keys(current), ...Object.keys(incoming)])
+
+  for (const key of allKeys) {
+    const inBase = key in base
+    const inCurrent = key in current
+    const inIncoming = key in incoming
+
+    if (inBase && inCurrent && inIncoming) {
+      const currentChanged = !deepEqual(base[key], current[key])
+      const incomingChanged = !deepEqual(base[key], incoming[key])
+
+      if (!currentChanged && !incomingChanged) {
+        merged[key] = current[key]
+      } else if (incomingChanged && !currentChanged) {
+        merged[key] = incoming[key]
+      } else if (currentChanged && !incomingChanged) {
+        merged[key] = current[key]
+      } else {
+        if (deepEqual(current[key], incoming[key])) {
+          merged[key] = current[key]
+        } else {
+          merged[key] = incoming[key]
+          conflicts.push(key)
+        }
+      }
+    } else if (!inBase && inIncoming && !inCurrent) {
+      merged[key] = incoming[key]
+    } else if (!inBase && !inIncoming && inCurrent) {
+      merged[key] = current[key]
+    } else if (!inBase && inIncoming && inCurrent) {
+      if (deepEqual(current[key], incoming[key])) {
+        merged[key] = current[key]
+      } else {
+        merged[key] = incoming[key]
+        conflicts.push(key)
+      }
+    } else if (inBase && !inIncoming && inCurrent) {
+      const currentChanged = !deepEqual(base[key], current[key])
+      if (currentChanged) {
+        merged[key] = current[key]
+        conflicts.push(key)
+      }
+    } else if (inBase && inIncoming && !inCurrent) {
+      const incomingChanged = !deepEqual(base[key], incoming[key])
+      if (incomingChanged) {
+        merged[key] = incoming[key]
+        conflicts.push(key)
+      }
+    }
+  }
+
+  return { merged, conflicts }
+}
+
+function threeWayMergeScalar<T>(base: T, current: T, incoming: T): { value: T, conflict: boolean } {
+  const currentChanged = !deepEqual(base, current)
+  const incomingChanged = !deepEqual(base, incoming)
+
+  if (!currentChanged && !incomingChanged) return { value: current, conflict: false }
+  if (incomingChanged && !currentChanged) return { value: incoming, conflict: false }
+  if (currentChanged && !incomingChanged) return { value: current, conflict: false }
+  if (deepEqual(current, incoming)) return { value: current, conflict: false }
+  return { value: incoming, conflict: true }
+}
+
+export async function mergeAgentIntoOriginal(forkedAgent: Agent, team_id: string): Promise<MergeResult> {
+  if (!forkedAgent.fork_id) {
+    throw new Error("This agent is not a fork")
+  }
+
+  const originalId = Number(forkedAgent.fork_id)
+  const forkedId = forkedAgent.id
+
+  const { data: originalData, error: fetchError } = await supabase
+    .from("agents")
+    .select("*")
+    .eq("id", originalId)
+    .eq("team_id", team_id)
+    .single()
+
+  if (fetchError || !originalData) {
+    throw new Error("Original agent not found or not accessible")
+  }
+
+  const { data: forkDbData } = await supabase
+    .from("agents")
+    .select("fork_base")
+    .eq("id", forkedId)
+    .single()
+
+  const forkBase = (forkDbData?.fork_base ?? null) as AgentConfig | null
+
+  const originalAgent = configureAgent(originalData as any)
+  originalAgent.versions = (originalData.versions || []) as AgentVersion[]
+  saveVersion("Pre-merge snapshot", originalAgent, team_id)
+
+  const forkedData = getAgentToSave(forkedAgent, team_id)
+
+  const conflicts: MergeResult["conflicts"] = { workers: [], edges: [], fields: [] }
+  let mergedWorkers: WorkerConfig[]
+  let mergedEdges: object
+  let mergedDescription: string | undefined
+  let mergedType: AgentTypes | undefined
+
+  if (forkBase) {
+    const baseWorkers = workersListToMap((forkBase.workers || []) as WorkerConfig[])
+    const currentWorkers = workersListToMap((originalData.workers || []) as unknown as WorkerConfig[])
+    const incomingWorkers = workersListToMap((forkedData.workers || []) as WorkerConfig[])
+
+    const workerMerge = threeWayMergeMap(
+      baseWorkers as Record<string, unknown>,
+      currentWorkers as Record<string, unknown>,
+      incomingWorkers as Record<string, unknown>
+    )
+    mergedWorkers = workersMapToList(workerMerge.merged as Record<string, WorkerConfig>)
+    conflicts.workers = workerMerge.conflicts
+
+    const baseEdges = (forkBase.edges || {}) as Record<string, unknown>
+    const currentEdges = (originalData.edges || {}) as Record<string, unknown>
+    const incomingEdges = (forkedData.edges || {}) as Record<string, unknown>
+
+    const edgeMerge = threeWayMergeMap(baseEdges, currentEdges, incomingEdges)
+    mergedEdges = edgeMerge.merged
+    conflicts.edges = edgeMerge.conflicts
+
+    const descMerge = threeWayMergeScalar(
+      forkBase.description ?? "",
+      originalData.description ?? "",
+      forkedData.description ?? ""
+    )
+    mergedDescription = descMerge.value
+    if (descMerge.conflict) conflicts.fields.push("description")
+
+    const typeMerge = threeWayMergeScalar(
+      forkBase.type ?? "data",
+      (originalData.type ?? "data") as AgentTypes,
+      (forkedData.type ?? "data") as AgentTypes
+    )
+    mergedType = typeMerge.value
+    if (typeMerge.conflict) conflicts.fields.push("type")
+  } else {
+    mergedWorkers = (forkedData.workers || []) as WorkerConfig[]
+    mergedEdges = forkedData.edges || {}
+    mergedDescription = forkedData.description
+    mergedType = forkedData.type
+  }
+
+  const mergedData = {
+    workers: mergedWorkers,
+    edges: mergedEdges,
+    description: mergedDescription,
+    type: mergedType,
+    title: originalData.title,
+    debuguuid: originalData.debuguuid,
+    versions: originalAgent.versions,
+    team_id,
+  }
+
+  const { error: updateError } = await supabase
+    .from("agents")
+    .update(mergedData as any)
+    .eq("id", originalId)
+
+  if (updateError) {
+    throw new Error(`Failed to merge agent: ${updateError.message}`)
+  }
+
+  if (forkedId) {
+    const { error: deleteError } = await supabase
+      .from("agents")
+      .delete()
+      .eq("id", forkedId)
+
+    if (deleteError) {
+      console.error("Failed to delete forked agent after merge:", deleteError.message)
+    }
+  }
+
+  const hasConflicts = conflicts.workers.length > 0 || conflicts.edges.length > 0 || conflicts.fields.length > 0
+  return { originalId, conflicts, hasConflicts }
 }
 
 export async function loadAgent(id: number, teamId: string): Promise<Agent | null> {
