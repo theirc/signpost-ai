@@ -365,7 +365,7 @@ export function createAgent(config: AgentConfig) {
       // ───── Message and Contact ────────────────────────────────────────
 
       try {
-        if (p.integration && p.integration.contact && p.apiKeys && p.apiKeys.codec && p.output?.response) {
+        if (p.integration && p.integration && p.apiKeys && p.apiKeys.codec && p.output?.response) {
 
           await integrations.saveMessage({
             integration: p.integration,
@@ -376,6 +376,7 @@ export function createAgent(config: AgentConfig) {
             message: p.output?.response,
             agent: agent.id
           })
+        } else {
         }
       } catch (err) {
         console.error("Error saving integration contact:", err)
