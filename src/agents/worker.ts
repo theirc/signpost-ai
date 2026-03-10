@@ -71,6 +71,7 @@ declare global {
   }
 
   interface ToolConfig {
+    name?: string
     description?: string
     parameters?: ZodObject<any>
     execute?(args: any, ctx?: any): Promise<string>
@@ -214,9 +215,11 @@ export function buildWorker(w: WorkerConfig) {
       const tools: ToolConfig[] = []
 
       for (const c of connected) {
-        const { description, parameters, execute } = c.getTool(c, p)
+        const cfg = c.getTool(c, p)
+        const { name, description, parameters, execute } = cfg
         if (!description) throw new Error(`Worker does not have a Tool Description parameter set. Please set it to describe the tool's purpose.`)
         tools.push({
+          name,
           description,
           parameters,
           execute,
@@ -449,7 +452,14 @@ export function buildWorker(w: WorkerConfig) {
       if (!inp || !out) return
 
       worker.referencedAgent = agent
-      w.handles = {}
+
+      const keepHandles = {}
+
+      for (const h of worker.handlersArray) {
+        keepHandles[h.id] = h
+      }
+
+      w.handles = keepHandles
 
       for (const h of Object.values(inp.handles)) {
         h.direction = "input"

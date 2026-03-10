@@ -190,8 +190,8 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
   const agentTools = worker.getTools(worker, p)
   const tools: FunctionTool[] = agentTools.map(t => {
     return tool({
-      name: t.description,
-      description: t.description,
+      name: t.name ?? t.description ?? 'tool',
+      description: t.description ?? '',
       parameters: t.parameters as any,
       execute: t.execute,
     })

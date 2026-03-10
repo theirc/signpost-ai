@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { parseJsonParams, parseJsonHeaders, applyAuth, doHttpRequest } from '../httpRequest'
 
 export interface ApiWorker extends AIWorker {
   fields: {
@@ -63,89 +64,25 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
     }
 
     const method = (worker.parameters.method || 'GET').toUpperCase()
-    const paramsString = worker.parameters.params || '{}'
-    const headersString = worker.parameters.headers || '{}'
+    const params = parseJsonParams(worker.parameters.params || '{}')
+    const headers = parseJsonHeaders(worker.parameters.headers || '{}')
     const timeout = worker.parameters.timeout || 10000
     const authType = worker.parameters.authType || 'none'
     const username = worker.parameters.username
     const selectedKeyName = worker.parameters.selectedKeyName || ''
     const bodyValue = worker.fields.body.value
 
-    let params = {}
-    try {
-      params = JSON.parse(paramsString)
-    } catch (e) {
-      console.error(`${logPrefix} - Failed to parse Params JSON: ${paramsString}`, e)
-      throw new Error("Invalid params JSON in parameters.")
-    }
-    let headers: Record<string, string> = {}
-    try {
-      headers = JSON.parse(headersString)
-    } catch (e) {
-      console.error(`${logPrefix} - Failed to parse Headers JSON: ${headersString}`, e)
-      throw new Error("Invalid headers JSON in parameters.")
-    }
-
-    // Clean sensitive headers before logging/using
-    delete headers['Authorization']
-    delete headers['X-API-Key']
-    Object.keys(headers).forEach(key => {
-      if (key.toLowerCase() === 'x-api-key' || key.toLowerCase() === 'authorization') delete headers[key]
-    })
-
-    let actualValue: string | undefined
-    if (authType !== 'none' && authType) {
+    if (authType !== 'none') {
       if (!selectedKeyName) {
-        console.error(`${logPrefix} - Auth type specified but no key name selected.`)
         throw new Error(`Auth type '${authType}' selected, but no Stored Key Name chosen.`)
       }
-
-      // 1. Check Environment Variables first
-      const envVarValue = process.env[selectedKeyName]
-      if (envVarValue !== undefined && envVarValue !== '') {
-        actualValue = envVarValue
-        // DO NOT log the actual key value here for security
-      } else {
-        // 2. If not in env, check AgentParameters.apikeys
-        const paramKeyValue = p.apiKeys?.[selectedKeyName]
-        if (paramKeyValue !== undefined) {
-          actualValue = paramKeyValue
-          // DO NOT log the actual key value here for security
-        } else {
-          // 3. If not found in either, throw error
-          console.error(`${logPrefix} - Key '${selectedKeyName}' not found in environment or AgentParameters.`)
-          throw new Error(`Selected stored key "${selectedKeyName}" not found in environment variables or provided AgentParameters.apikeys.`)
-        }
+      const applied = applyAuth(authType, username, selectedKeyName, p.apiKeys as Record<string, string | undefined> | undefined, headers)
+      if (!applied && authType === 'basic' && !username) {
+        throw new Error("Username required for Basic Auth.")
       }
-    }
-
-    switch (authType) {
-      case 'basic':
-        if (!username) {
-          console.error(`${logPrefix} - Basic Auth selected but username is missing.`)
-          throw new Error("Username required for Basic Auth.")
-        }
-        if (actualValue !== undefined) {
-          headers.Authorization = `Basic ${btoa(`${username}:${actualValue}`)}`
-        } else {
-          console.warn(`${logPrefix} - Basic Auth selected but key value was not found.`)
-        }
-        break
-      case 'bearer':
-        if (actualValue !== undefined) {
-          headers.Authorization = `Bearer ${actualValue}`
-        } else {
-          console.warn(`${logPrefix} - Bearer Auth selected but key value was not found.`)
-        }
-        break
-      case 'api_key':
-        if (actualValue !== undefined) {
-          headers['X-API-Key'] = actualValue
-        } else {
-          console.warn(`${logPrefix} - API Key Auth selected but key value was not found.`)
-        }
-        break
-      default:
+      if (!applied) {
+        throw new Error(`Selected stored key "${selectedKeyName}" not found in environment variables or provided AgentParameters.apikeys.`)
+      }
     }
 
     let data = undefined
@@ -158,53 +95,14 @@ async function execute(worker: ApiWorker, p: AgentParameters) {
     }
     // --- End Common Setup ---
 
-    // --- Environment Check and Call --- 
-    const isBrowser = typeof window !== 'undefined'
-    let apiResponseData: any
-    let apiResponseStatus: number | undefined
-    let apiResponseStatusText: string | undefined
-
-    if (isBrowser) {
-      // FRONTEND: Use the proxy (using fetch like Telerivet hooks for better performance)
-      const proxyPayload = { url: endpoint, method, headers, params, data, timeout }
-      const proxyResponse = await fetch('/api/axiosFetch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(proxyPayload)
-      })
-
-      if (!proxyResponse.ok) {
-        const errorText = await proxyResponse.text()
-        throw new Error(`Proxy service failed: ${proxyResponse.status} - ${errorText}`)
-      }
-
-      const proxyResult = await proxyResponse.json()
-      if (proxyResult?.error) {
-        throw new Error(`Proxy error: ${proxyResult.error} ${proxyResult.message || ''}`)
-      }
-      apiResponseData = proxyResult?.data
-      apiResponseStatus = proxyResult?.status
-      apiResponseStatusText = proxyResult?.statusText
-
-    } else {
-      // BACKEND: Make direct call
-      const axiosConfig = {
-        method: method as any,
-        url: endpoint,
-        headers: headers,
-        params: params,
-        data: data,
-        timeout: timeout,
-        validateStatus: (status) => status >= 200 && status < 500, // Handle 4xx locally
-      }
-      const directResponse = await axios(axiosConfig)
-      apiResponseData = directResponse.data
-      apiResponseStatus = directResponse.status
-      apiResponseStatusText = directResponse.statusText
-    }
-    // --- End Environment Check and Call --- 
+    const { data: apiResponseData, status: apiResponseStatus, statusText: apiResponseStatusText } = await doHttpRequest({
+      url: endpoint,
+      method,
+      headers,
+      params: params as Record<string, unknown>,
+      data,
+      timeout
+    }) 
 
     // --- Common Response Handling --- 
     worker.fields.error.value = '' // Clear previous error

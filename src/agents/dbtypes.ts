@@ -2,7 +2,7 @@
 declare global {
 
   type MessageRoles = 'user' | 'assistant' | "human" | "synthetic"
-  type ContactTypes = "user" | "operator" | "synthetic"
+  type ContactTypes = "user" | "operator" | "synthetic" | "ai"
 
   interface Contact {
     id?: string
@@ -11,6 +11,7 @@ declare global {
     type?: ContactTypes
     data?: string
     team?: string
+    code?: string
     created_at?: string
   }
 
@@ -22,6 +23,7 @@ declare global {
     channel?: IntegrationsTypes
     role?: MessageRoles
     team?: string
+    sender?: string
     created_at?: string
   }
 
