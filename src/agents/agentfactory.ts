@@ -576,6 +576,7 @@ export function loadVersion(version: number, agent: Agent) {
 
 export async function saveAgent(agent: Agent, team_id?: string) {
 
+  debugger
   const agentData = getAgentToSave(agent, team_id)
   agentData.versions = agent.versions
 

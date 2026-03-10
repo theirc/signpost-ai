@@ -19,12 +19,12 @@ const openAiModels = [
   'o3-pro',
   'o1',
   'gpt-4o',
-  'gpt-4o-search-preview',
   'chatgpt-4o-latest',
   'gpt-4o-mini',
   'gpt-4-turbo',
   'gpt-4',
   'gpt-3.5-turbo',
+  'o4-mini-deep-research',
 ]
 
 const anthropicModels = [
