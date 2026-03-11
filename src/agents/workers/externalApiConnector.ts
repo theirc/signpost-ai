@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { z } from 'zod'
-import { parseJsonHeaders, parseJsonParams, applyAuth, doHttpRequest } from '../httpRequest'
+import { parseJsonHeaders, parseJsonParams, applyAuth, doHttpRequest, getOAuth2ClientCredentialsToken } from '../httpRequest'
 
 declare global {
   interface ExternalApiConnectorWorker extends AIWorker {
@@ -13,6 +13,7 @@ declare global {
       toolName?: string
       toolDescription?: string
       endpoint?: string
+      method?: string
       params?: string
       paramsSchema?: string
       headers?: string
@@ -20,6 +21,9 @@ declare global {
       authType?: string
       username?: string
       selectedKeyName?: string
+      oauth2TokenUrl?: string
+      oauth2ClientId?: string
+      oauth2Scope?: string
       rateLimitPerMinute?: number
       maxRetries?: number
     }
@@ -120,7 +124,34 @@ function getTool(w: ExternalApiConnectorWorker, p: AgentParameters): ToolConfig 
       if (authType === 'basic' && !w.parameters.username) {
         return JSON.stringify({ error: 'Username required for Basic Auth.' })
       }
-      if (authType !== 'none' && w.parameters.selectedKeyName) {
+      if (authType === 'oauth2_client_credentials') {
+        const tokenUrl = (w.parameters.oauth2TokenUrl || '').trim()
+        const clientId = (w.parameters.oauth2ClientId || '').trim()
+        const clientSecret = (p.apiKeys as Record<string, string | undefined> | undefined)?.[w.parameters.selectedKeyName || '']
+        if (!tokenUrl) {
+          return JSON.stringify({ error: 'OAuth2 Token URL is required for OAuth 2.0 Client Credentials.' })
+        }
+        if (!clientId) {
+          return JSON.stringify({ error: 'OAuth2 Client ID is required for OAuth 2.0 Client Credentials.' })
+        }
+        if (!clientSecret || !w.parameters.selectedKeyName) {
+          return JSON.stringify({ error: 'Stored key for OAuth2 Client Secret is required.' })
+        }
+        try {
+          const token = await getOAuth2ClientCredentialsToken(
+            tokenUrl,
+            clientId,
+            clientSecret,
+            (w.parameters.oauth2Scope || '').trim() || undefined,
+            timeout
+          )
+          headers.Authorization = `Bearer ${token}`
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          if (p.agent?.log) p.agent.log({ type: 'error', message: msg, worker: w.type, workerId: w.id })
+          return JSON.stringify({ error: msg })
+        }
+      } else if (authType !== 'none' && w.parameters.selectedKeyName) {
         const applied = applyAuth(
           authType,
           w.parameters.username,
@@ -150,14 +181,28 @@ function getTool(w: ExternalApiConnectorWorker, p: AgentParameters): ToolConfig 
       }
 
       const staticParams = parseJsonParams(w.parameters.params || '{}')
-      Object.assign(params, staticParams)
+      const method = (w.parameters.method || 'GET').toUpperCase() as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+      const sendsBody = method === 'POST' || method === 'PUT' || method === 'PATCH'
+
+      let requestParams: Record<string, unknown> = {}
+      let requestData: unknown = undefined
+      if (sendsBody) {
+        requestParams = {}
+        requestData = { ...staticParams, ...params }
+        if (Object.keys(headers).every(k => k.toLowerCase() !== 'content-type')) {
+          headers['Content-Type'] = 'application/json'
+        }
+      } else {
+        Object.assign(params, staticParams)
+        requestParams = params
+      }
 
       if (p.agent?.log) {
         p.agent.log({
           type: 'tool_start',
           worker: w.type,
           workerId: w.id,
-          message: `Calling GET ${endpoint}`,
+          message: `Calling ${method} ${endpoint}`,
           handles: {},
           parameters: { toolName, args: Object.keys(args) }
         })
@@ -168,9 +213,10 @@ function getTool(w: ExternalApiConnectorWorker, p: AgentParameters): ToolConfig 
         try {
           const { data, status, statusText } = await doHttpRequest({
             url,
-            method: 'GET',
+            method,
             headers,
-            params,
+            params: requestParams,
+            data: requestData,
             timeout
           })
           if (status >= 200 && status < 300) {
@@ -225,6 +271,7 @@ function create(agent: Agent) {
         toolName: 'external_api',
         toolDescription: 'Call an external HTTP API',
         endpoint: '',
+        method: 'GET',
         params: '{}',
         paramsSchema: '[]',
         headers: '{}',
@@ -232,6 +279,9 @@ function create(agent: Agent) {
         authType: 'none',
         username: '',
         selectedKeyName: '',
+        oauth2TokenUrl: '',
+        oauth2ClientId: '',
+        oauth2Scope: '',
         rateLimitPerMinute: 60,
         maxRetries: 2
       }

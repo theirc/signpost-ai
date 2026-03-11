@@ -59,6 +59,7 @@ export async function getArticles(brand?: string, limit?: number): Promise<any[]
 
 
     } catch (error) {
+      if (error) console.error(`Error in Zendesk 'getArticles': ${error}`)
       // debugger
     }
   }
@@ -84,6 +85,7 @@ export async function getZendeskArticle(id: number, domain: string): Promise<Zen
     const r = await axios.get(url, { headers })
     zdars = r.data?.article
   } catch (error) {
+    if (error) console.error(`Error in Zendesk 'getZendeskArticle': ${error}`)
     debugger
   }
 
@@ -111,6 +113,7 @@ export async function getZendeskArticles(domain: string): Promise<ZendeskArticle
     }
 
   } catch (error) {
+    if (error) console.error(`Error in Zendesk 'getZendeskArticles': ${error}`)
     debugger
   }
 
@@ -134,6 +137,7 @@ export async function getDomains(): Promise<string[]> {
     try {
       brands.push(b.subdomain)
     } catch (error) {
+      if (error) console.error(`Error in Zendesk 'getDomains': ${error}`)
       debugger
     }
   }
@@ -155,6 +159,7 @@ export async function getDomainById(id: string | number): Promise<string> {
     try {
       if (b.id == id) return b.subdomain
     } catch (error) {
+      if (error) console.error(`Error in Zendesk 'getDomainById': ${error}`)
       debugger
     }
   }
@@ -175,7 +180,8 @@ async function getArts(url: string, limit?: number): Promise<ZendeskArticle[]> {
 
   try {
     response = (await axios.get(url, { headers })).data || {}
-  } catch (err) {
+  } catch (error) {
+    if (error) console.error(`Error in Zendesk 'getArts': ${error}`)
     // debugger
   }
 
@@ -188,7 +194,8 @@ async function getArts(url: string, limit?: number): Promise<ZendeskArticle[]> {
   while (response.next_page) {
     try {
       response = (await axios.get(response.next_page, { headers })).data || {}
-    } catch (err) {
+    } catch (error) {
+      if (error) console.error(`Error in Zendesk 'getArts': ${error}`)
       // debugger
       return arts
     }
