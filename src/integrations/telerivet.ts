@@ -106,7 +106,7 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
   const projectId = r.project_id
 
   if (content == "/reset") {
-    await a.resetAgent(uid, team)
+    await a.resetAgent(uid)
     await sendMessage({ content: "The chat history has been reset.", to_number: r.from_number, projectId, api_key: apiKeys.telerivet })
     return
   }

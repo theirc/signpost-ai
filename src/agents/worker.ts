@@ -471,7 +471,7 @@ export function buildWorker(w: WorkerConfig) {
       }
 
       worker.updateWorker()
-      console.log("Worker Referenced Agent Loaded: ", worker.referencedAgent)
+      console.log(`Worker Referenced Agent Loaded ${worker?.referencedAgent?.title}`)
     },
 
     clone(a: any) {

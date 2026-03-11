@@ -27,6 +27,9 @@ export async function searchSupabase(p: VectorSerach) {
     // similarity: 'cosine',                // or 'cosine'
   })
 
+
+  if (error) console.error(`Error in Supabase Search: ${error}`)
+
   results = data.map((item) => {
     const v: VectorDocument = {
       body: item.content,
@@ -56,6 +59,9 @@ export async function searchSupabaseDomains(p: VectorSerach) {
     filter_is_chunk: p.chunked || false,           // or true/false
     filter_domains: p.sources || null,           // int[] or null
   })
+
+  if (error) console.error(`Error in Supabase Search by Domain: ${error}`)
+
 
   results = data.map((item) => {
     const v: VectorDocument = {
@@ -88,6 +94,9 @@ export async function searchServices(p: VectorSerach) {
     filter_locale: p.domain || null,
     filter_ids: p.sources || null,
   })
+
+  if (error) console.error(`Error in Supabase Search Services: ${error}`)
+
 
   results = data.map((item) => {
     const v: VectorDocument = {

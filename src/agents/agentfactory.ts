@@ -271,7 +271,7 @@ export function createAgent(config: AgentConfig) {
 
 
       if (message && message.trim().toLowerCase() === "/reset") {
-        agent.resetAgent(p.uid, p.team)
+        agent.resetAgent(p.uid)
         p.output.response = "The chat history and state has been reset."
         agent.currentWorker = null
         agent.update()
@@ -433,10 +433,10 @@ export function createAgent(config: AgentConfig) {
       delete workers[id]
     },
 
-    async resetAgent(uid: string, team: string) {
+    async resetAgent(uid: string) {
       await supabase.from("states").delete().eq("id", uid)
-      await supabase.from("history").delete().eq("uid", uid).eq("team", team)
-      await supabase.from("events").delete().eq("id", uid).eq("team", team)
+      await supabase.from("history").delete().eq("uid", uid)
+      await supabase.from("events").delete().eq("id", uid)
     },
 
   }
