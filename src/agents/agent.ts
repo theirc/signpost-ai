@@ -1,10 +1,34 @@
-import { createAgent, configureAgent, loadAgent, saveAgent } from "./agentfactory"
+import { createAgent, configureAgent, loadAgent, saveAgent, forkAgent, mergeAgentIntoOriginal } from "./agentfactory"
+
 
 declare global {
 
   type LiteralUnion<KnownValues extends string> = (string & {}) | KnownValues
   type Agent = ReturnType<typeof createAgent>
   type EdgeConnections = { [index: string]: { source: string, target: string, sourceHandle: string, targetHandle: string } }
+
+  type IntegrationsTypes = "telerivet" | "app"
+
+  interface IntegrationPayload {
+    contact?: string //cross channel unique user id. If empty is created based on the integration.
+    type?: IntegrationsTypes
+    name?: string
+    phone?: string
+
+    //Telerivet
+    apiKey?: string
+    projectId?: string
+  }
+
+  interface AgentState {
+    agent: {
+      hitl?: {
+        active?: boolean
+        causes?: string[]
+      }
+    }
+    workers: { [key: string]: any }
+  }
 
   interface APIKeys {
     openai?: string
@@ -16,6 +40,12 @@ declare global {
     zendesk?: string
     googleTranslate?: string
     databricks?: string
+    exa?: string
+    jina?: string
+    youtube?: string
+    rescuenet?: string
+    telerivet?: string
+    codec?: string
   }
 
   interface AgentParameters {
@@ -28,10 +58,8 @@ declare global {
     apiKeys?: APIKeys
     team?: string
     session?: string
-    state?: {
-      agent: {}
-      workers: { [key: string]: any }
-    }
+    integration?: IntegrationPayload
+    state?: AgentState
     logWriter?: (p: { worker: AIWorker, state: any }) => void
   }
 }
@@ -41,5 +69,7 @@ export const agents = {
   configureAgent,
   saveAgent,
   loadAgent,
+  forkAgent,
+  mergeAgentIntoOriginal,
 }
 

@@ -19,18 +19,18 @@ const openAiModels = [
   'o3-pro',
   'o1',
   'gpt-4o',
-  'gpt-4o-search-preview',
   'chatgpt-4o-latest',
   'gpt-4o-mini',
   'gpt-4-turbo',
   'gpt-4',
   'gpt-3.5-turbo',
+  'o4-mini-deep-research',
 ]
 
 const anthropicModels = [
-  "claude-3-5-sonnet-latest",
-  "claude-3-5-haiku-latest",
-  "claude-3-opus-latest"
+  "claude-sonnet-4-5",
+  "claude-haiku-4-5",
+  "claude-opus-4-5"
 ]
 
 const googleModels = [
@@ -41,6 +41,9 @@ const googleModels = [
   "gemini-1.5-flash",
   "gemini-1.5-flash-8b",
   "gemini-1.5-pro",
+]
+const groqmodels = [
+  "openai/gpt-oss-safeguard-20b",
 ]
 
 export const OpenAIModels = openAiModels.map(model => ({
@@ -58,8 +61,14 @@ export const GoogleModels = googleModels.map(model => ({
   label: `Google - ${model}`
 }))
 
+export const GroqModels = groqmodels.map(model => ({
+  value: `groq/${model}`,
+  label: `Groq - ${model}`
+}))
+
 export const AllAIModels = [
   ...OpenAIModels,
   ...ClaudeModels,
   ...GoogleModels,
+  ...GroqModels
 ]

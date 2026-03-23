@@ -1,6 +1,5 @@
-import { AgentInputItem, FunctionTool, Agent as OpenAIAgent, run, tool, user, webSearchTool } from '@openai/agents'
+import { AgentInputItem, FunctionTool, Agent as OpenAIAgent, run, tool, user, webSearchTool, RunToolCallItem, RunToolCallOutputItem } from '@openai/agents'
 import { aisdk } from '@openai/agents-extensions'
-import { z } from 'zod'
 import { createModel } from '../utils'
 
 declare global {
@@ -22,6 +21,7 @@ declare global {
     }
     parameters: {
       model?: string
+      fallbackModel?: string
       searchTheWeb?: boolean
     }
     fields: {
@@ -35,14 +35,118 @@ declare global {
   }
 }
 
+interface InvokeModelParams {
+  modelId: string
+  apiKeys: any
+  instructions: string
+  history: AgentInputItem[]
+  handoffs: any[]
+  tools: FunctionTool[]
+  logAgent: { log: (data: any) => void }
+}
+
+interface ToolCallDetail {
+  name: string
+  arguments: string
+  result: string
+}
+
+interface InvokeModelResult {
+  finalOutput: string
+  history: AgentInputItem[]
+  inputTokens: number
+  outputTokens: number
+  searchContext: string
+  toolCalls: ToolCallDetail[]
+}
+
+async function invokeModel(params: InvokeModelParams): Promise<InvokeModelResult> {
+  const { modelId, apiKeys, instructions, history, handoffs, tools, logAgent } = params
+
+  const baseModel = createModel(apiKeys, modelId)
+  if (!baseModel) throw new Error("Failed to create model")
+
+  const model = aisdk(baseModel)
+
+  const agent = new OpenAIAgent({
+    name: 'Agent',
+    model,
+    instructions,
+    handoffs,
+    tools,
+  })
+
+  let searchContext = ""
+
+  agent.on("agent_handoff", (ctx, agent) => {
+    const message = `LLM Agent handoff to Agent with description '${agent.handoffDescription}'`
+    logAgent.log({ type: "handoff", message, })
+  })
+  agent.on("agent_tool_start", (ctx, b) => {
+    const message = `LLM Agent Tool '${b.name}' Start`
+    logAgent.log({ type: "tool_start", message, })
+  })
+  agent.on("agent_tool_end", (ctx, b) => {
+    const message = `LLM Agent Tool '${b.name}' End`
+    logAgent.log({ type: "tool_end", message, })
+    if (ctx['searchResults']) searchContext += `\n\nSearch Results for tool ${b.name}:\n${ctx['searchResults']}`
+  })
+
+  const result = await run(agent, history)
+
+  let inputTokens = 0
+  let outputTokens = 0
+  const state: AgentStateResponse = result.state as any
+  if (state && state._context && state._context.usage) {
+    inputTokens = state._context.usage.inputTokens || 0
+    outputTokens = state._context.usage.outputTokens || 0
+  }
+
+  const toolCalls: ToolCallDetail[] = []
+  const pendingCalls = new Map<string, ToolCallDetail>()
+
+  for (const item of result.newItems) {
+    if (item instanceof RunToolCallItem) {
+      const raw = item.rawItem as any
+      if (raw.type === "function_call") {
+        const detail: ToolCallDetail = {
+          name: raw.name || "unknown",
+          arguments: raw.arguments || "{}",
+          result: "",
+        }
+        pendingCalls.set(raw.callId, detail)
+        toolCalls.push(detail)
+      }
+    } else if (item instanceof RunToolCallOutputItem) {
+      const raw = item.rawItem as any
+      if (raw.type === "function_call_result" && raw.callId) {
+        const pending = pendingCalls.get(raw.callId)
+        if (pending) {
+          pending.result = typeof raw.output === "string" ? raw.output : JSON.stringify(raw.output)
+        }
+      }
+    }
+  }
+
+  return {
+    finalOutput: result.finalOutput,
+    history: result.history,
+    inputTokens,
+    outputTokens,
+    searchContext,
+    toolCalls,
+  }
+}
+
 
 async function execute(worker: PromptAgentWorker, p: AgentParameters) {
 
   const handoffAgents = worker.getConnectedWokersToHandle(worker.fields.handoff, p).filter((w) => w.config.type === "handoffAgent") as any as HandoffAgentWorker[]
-  const baseModel = createModel(p.apiKeys, worker.parameters.model ||= "openai/gpt-4.1")
+  const modelId = worker.parameters.model ||= "openai/gpt-4.1"
+  const fallbackModelId = worker.parameters.fallbackModel
   const useSearch = worker.parameters.searchTheWeb || false
 
-
+  const baseModel = createModel(p.apiKeys, modelId)
   if (!baseModel) {
     worker.error = "No model selected"
     return
@@ -61,9 +165,20 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
 
   let history: AgentInputItem[] = worker.fields.history.value || []
 
-  const model = aisdk(baseModel)
-  const instructions = worker.fields.instructions.value
+  let instructions = worker.fields.instructions.value || ""
   const input = worker.fields.input.value
+
+  const now = new Date()
+  const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
+  const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }
+  const formattedDate = now.toLocaleDateString("en-US", dateOptions as any)
+  const formattedTime = now.toLocaleTimeString("en-US", timeOptions as any)
+
+  instructions = `
+  The current date is ${formattedDate} and the current time is ${formattedTime}.
+
+  ${instructions}
+  `
 
   history.push(user(input || ""))
 
@@ -75,8 +190,9 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
   const agentTools = worker.getTools(worker, p)
   const tools: FunctionTool[] = agentTools.map(t => {
     return tool({
-      description: t.description,
-      parameters: t.parameters,
+      name: t.name ?? t.description ?? 'tool',
+      description: t.description ?? '',
+      parameters: t.parameters as any,
       execute: t.execute,
     })
   })
@@ -85,55 +201,55 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
     tools.push(webSearchTool() as any)
   }
 
-  const agent = new OpenAIAgent({
-    name: 'Agent',
-    model,
+  const invokeParams: InvokeModelParams = {
+    modelId,
+    apiKeys: p.apiKeys,
     instructions,
+    history,
     handoffs,
     tools,
-  })
-
-  let searchContext = ""
-
-  agent.on("agent_handoff", (ctx, agent) => {
-    const message = `LLM Agent handoff to Agent with description '${agent.handoffDescription}'`
-    p.agent.log({ type: "handoff", message, })
-    console.log(message)
-  })
-  agent.on("agent_tool_start", (ctx, b) => {
-    const message = `LLM Agent Tool '${b.name}' Start`
-    p.agent.log({ type: "tool_start", message, })
-    console.log(message, b, ctx)
-  })
-  agent.on("agent_tool_end", (ctx, b) => {
-    const message = `LLM Agent Tool '${b.name}' End`
-    p.agent.log({ type: "tool_end", message, })
-    if (ctx['searchResults']) searchContext += `\n\nSearch Results for tool ${b.name}:\n${ctx['searchResults']}`
-    console.log(message, b, ctx)
-  })
-
-  const result = await run(agent, history)
-  console.log("Agent State:", result.state)
-
-  worker.inputTokens = 0
-  worker.outputTokens = 0
-  const state: AgentStateResponse = result.state as any
-  if (state && state._context && state._context.usage) {
-    worker.inputTokens = state._context.usage.inputTokens || 0
-    worker.outputTokens = state._context.usage.outputTokens || 0
+    logAgent: p.agent,
   }
 
-  console.log("Result History:", result.history)
+  let result: InvokeModelResult
+  try {
+    result = await invokeModel(invokeParams)
+  } catch (error) {
+    console.error("Primary model failed:", error)
+    if (fallbackModelId) {
+      try {
+        result = await invokeModel({ ...invokeParams, modelId: fallbackModelId })
+      } catch (fallbackError) {
+        console.error("Fallback model also failed:", fallbackError)
+        worker.error = `Both primary and fallback models failed: ${fallbackError}`
+        return
+      }
+    } else {
+      worker.error = `Model invocation failed: ${error}`
+      return
+    }
+  }
+
+  worker.inputTokens = result.inputTokens
+  worker.outputTokens = result.outputTokens
 
   const historyWorkers = worker.getConnectedWokersToHandle(worker.fields.history, p).filter((w) => w.config.type === "chatHistory") as any as ChatHistoryWorker[]
   const hw = historyWorkers[0]
 
   if (hw) {
-    console.log("History Worker", hw)
-    await hw.saveHistory(hw, p, result.history, searchContext, worker.inputTokens, worker.outputTokens)
+    await hw.saveHistory(hw, p, result.history, result.searchContext, worker.inputTokens, worker.outputTokens)
   }
 
   worker.fields.output.value = result.finalOutput
+
+  if (result.toolCalls.length > 0) {
+    p.agent.toolCallNodes = result.toolCalls.map((tc) => ({
+      name: tc.name,
+      arguments: tc.arguments,
+      result: tc.result,
+      sourceWorkerId: worker.id,
+    }))
+  }
 
 }
 

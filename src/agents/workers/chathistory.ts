@@ -19,6 +19,7 @@ declare global {
       output: NodeIO
     }
     saveHistory(worker: ChatHistoryWorker, p: AgentParameters, history: AgentInputItem[], searchContext?: string, inputTokens?: number, outputTokens?: number): Promise<void>
+    addMessageToHistory(uid: string, agent: string, team: string, role: 'user' | 'assistant' | "human", text: string): Promise<void>
 
   }
 }
@@ -40,7 +41,7 @@ async function execute(worker: ChatHistoryWorker, p: AgentParameters) {
     .eq("worker", worker.id).order("id", { ascending: true })
 
   if (dbHistory.error) {
-    console.log("DB Error", dbHistory.error)
+    console.error("DB Error", dbHistory.error)
     worker.error = dbHistory.error.toString()
     return
   }
@@ -58,8 +59,6 @@ async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, histor
 
   if (!p.uid) return
 
-  console.log("Saving History", history)
-  console.log("Search Context", searchContext)
 
   const historyType = worker.parameters.history || "full"
   const keepLatest = Number(worker.parameters.keepLatest) || 100
@@ -70,8 +69,6 @@ async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, histor
   let oldMessages = history.filter((h: any) => !!h.__FROM_DB__)
 
   if (historyType === "sumarized") {
-
-    console.log("Summarizing History...")
 
     if (oldMessages.length > sumarizeWhen + keepLatest) {
 
@@ -93,7 +90,6 @@ async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, histor
           if (h.type == "message") return { role: h.role as any, content: (h.content[0] as any)?.text } satisfies CoreMessage
         })
 
-        console.log(`Deleting ${messagesToDelete.length} Messages`)
         const model = createModel(p.apiKeys, worker.parameters.sumarizationModel ||= "openai/gpt-4-turbo")
 
         messages = [{
@@ -107,12 +103,8 @@ async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, histor
           messages,
         })
 
-        console.log("Summarized History: ", text)
-
         const idsTodelete = messagesToDelete.map((h: any) => h.id)
         const minId = Math.min(...idsTodelete)
-
-        console.log("Min id:", minId)
         await supabase.from("history").delete().in("id", idsTodelete)
 
         await supabase.from("history").insert({
@@ -159,6 +151,26 @@ async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, histor
 
 }
 
+async function addMessageToHistory(uid: string, agent: string, team: string, role: 'user' | 'assistant' | "human", text: string): Promise<void> {
+
+  if (!uid || !agent || !role || !text) return
+
+  const type = role == "user" ? "input_text" : "output_text"
+
+  const newItemsToSave = {
+    uid,
+    agent,
+    role,
+    type: "message",
+    team,
+    content: [{ text, type }],
+    payload: { role, type: "message", content: [{ text, type }] }
+  } satisfies HistoryItem
+
+  await supabase.from("history").insert(newItemsToSave)
+
+}
+
 
 
 export const chatHistory: WorkerRegistryItem = {
@@ -185,6 +197,7 @@ export const chatHistory: WorkerRegistryItem = {
       chatHistory
     ) as ChatHistoryWorker
     w.saveHistory = saveHistory
+    w.addMessageToHistory = addMessageToHistory
     return w
   },
   get registry() { return chatHistory },

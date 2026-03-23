@@ -104,7 +104,7 @@ async function execute(worker: StructuredOutputWorker, p: AgentParameters) {
 
   const jsonout = {}
   if (object) {
-    for (const key in object) {
+    for (const key in object as any) {
       const h = handlers.find((h) => h.name == key)
       if (h) {
         worker.fields[h.name].value = object[key]

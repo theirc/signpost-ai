@@ -7,11 +7,18 @@ import { convertDocumentsToMarkdown } from '../utils'
 
 declare global {
 
+  interface ToolCallInfo {
+    name: string
+    arguments: string
+    result: string
+  }
+
   type ChatHistory = {
     role: "user" | "assistant"
     content: string
     files?: any[]
     //ToDo: add timestamp
+    toolCalls?: ToolCallInfo[]
   }[]
 
   interface BotWorker extends AIWorker {

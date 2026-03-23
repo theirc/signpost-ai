@@ -1,29 +1,30 @@
+import OpenAI from "openai"
+import axios from "axios"
+
 declare global {
-  type TTSEngine = "whisper"
+  type TTSEngine = "google" | "openai"
   interface TTSWorker extends AIWorker {
     fields: {
       input: NodeIO
       output: NodeIO
     }
-    parameters: {}
+    parameters: {
+      engine?: TTSEngine
+    }
   }
 }
 
 async function detectLanguage(text: string, googleTranslateApiKey: string) {
   try {
     const url = `https://translation.googleapis.com/language/translate/v2/detect?key=${googleTranslateApiKey}`
-    const response = await fetch(url, {
-      method: 'POST',
+    const response = await axios.post(url, {
+      q: text
+    }, {
       headers: {
         'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        q: text
-      })
+      }
     })
-    const data = await response.json()
-    const detection = data.data.detections[0][0]
-    console.log(`Detected language: ${detection.language}`)
+    const detection = response.data.data.detections[0][0]
     return detection.language
   } catch (error) {
     console.error('Error detecting language: ', error)
@@ -34,11 +35,8 @@ async function detectLanguage(text: string, googleTranslateApiKey: string) {
 async function getAvailableVoices(googleApiKey: string) {
   try {
     const url = `https://texttospeech.googleapis.com/v1/voices?key=${googleApiKey}`
-    const response = await fetch(url, {
-      method: 'GET',
-    })
-    const responseJson = await response.json()
-    return responseJson?.voices
+    const response = await axios.get(url)
+    return response.data?.voices
   } catch (error) {
     console.error('Error fetching voices: ', error)
   }
@@ -57,7 +55,7 @@ async function findBestVoiceForLanguage(languageCode: string, voices: any[]): Pr
   return 'en-US'
 }
 
-async function googletextToSpeech(text: string, format: string, apikeys: APIKeys): Promise<string> {
+async function googletextToSpeech(text: string, format: string, apikeys: APIKeys): Promise<{ audio: string, ext: string }> {
   try {
     const language = await detectLanguage(text, apikeys?.googleTranslate || "")
     const voices = await getAvailableVoices(apikeys?.google || "")
@@ -79,7 +77,9 @@ async function googletextToSpeech(text: string, format: string, apikeys: APIKeys
       }
     }
 
-    if (!apikeys.google || !text) return
+    if (!apikeys.google || !text) {
+      throw new Error("Google API key or text is missing")
+    }
 
     const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apikeys.google}`
 
@@ -95,27 +95,76 @@ async function googletextToSpeech(text: string, format: string, apikeys: APIKeys
       }
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      body: JSON.stringify(data)
+    const response = await axios.post(url, data, {
+      headers: {
+        'Content-Type': 'application/json',
+      }
     })
 
-    const responseJson = await response.json()
-    return responseJson?.audioContent
+    const audioContent = response.data?.audioContent
+
+    // Determine file extension based on format
+    let ext = "ogg"
+    if (format === "MP3") {
+      ext = "mpeg" // Use mpeg extension for audio/mpeg mime type
+    } else if (format === "OGG_OPUS") {
+      ext = "ogg"
+    }
+
+    return { audio: audioContent, ext }
 
   } catch (error) {
-    throw new Error(error)
+    throw new Error(`Google TTS error: ${error instanceof Error ? error.message : String(error)}`)
   }
 
 }
 
+async function openaiTextToSpeech(text: string, apikeys: APIKeys): Promise<{ audio: string, ext: string }> {
+  try {
+    if (!apikeys.openai || !text) {
+      throw new Error("OpenAI API key or text is missing")
+    }
+
+    const openai = new OpenAI({ apiKey: apikeys.openai, dangerouslyAllowBrowser: true })
+
+    // Use opus format for Telerivet compatibility (audio/ogg; codecs=opus)
+    const response = await openai.audio.speech.create({
+      model: "tts-1",
+      input: text,
+      voice: "alloy", // Options: alloy, echo, fable, onyx, nova, shimmer
+      response_format: "opus", // Changed to opus for Telerivet compatibility
+      speed: 1.0
+    })
+
+    // Convert the response to base64
+    const arrayBuffer = await response.arrayBuffer()
+    const bytes = new Uint8Array(arrayBuffer)
+    let binary = ''
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i])
+    }
+    const base64 = btoa(binary)
+
+    return { audio: base64, ext: "ogg" } // opus format uses ogg container
+  } catch (error) {
+    throw new Error(`OpenAI TTS error: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
 async function execute(worker: TTSWorker, { apiKeys }: AgentParameters) {
-
   const text = worker.fields.input.value
+  const engine = worker.parameters.engine || "google" // Default to Google for backward compatibility
 
-  const textToSpeech = await googletextToSpeech(text, "MP3", apiKeys)
+  let result: { audio: string, ext: string }
 
-  worker.fields.output.value = { audio: textToSpeech, ext: "mp3" }
+  if (engine === "openai") {
+    result = await openaiTextToSpeech(text, apiKeys)
+  } else {
+    // Use OGG_OPUS format for Google TTS to ensure Telerivet compatibility
+    result = await googletextToSpeech(text, "OGG_OPUS", apiKeys)
+  }
+
+  worker.fields.output.value = result
 }
 
 
@@ -130,6 +179,9 @@ export const tts: WorkerRegistryItem = {
       {
         type: "tts",
         conditionable: true,
+        parameters: {
+          engine: "google" as TTSEngine, // Initialize with default engine
+        },
       },
       [
         { type: "string", direction: "input", title: "Input", name: "input" },

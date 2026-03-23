@@ -37,7 +37,7 @@ function getTools(worker: HandoffAgentWorker, p: AgentParameters): FunctionTool[
     if (!description) throw new Error(`Worker does not have a Tool Description parameter set. Please set it to describe the tool's purpose.`)
     const searchTool = tool({
       description,
-      parameters,
+      parameters: parameters as any,
       execute,
     })
     tools.push(searchTool)
@@ -59,7 +59,7 @@ async function getHandoffAgent(worker: HandoffAgentWorker, p: AgentParameters): 
   const tools: FunctionTool[] = agentTools.map(t => {
     return tool({
       description: t.description,
-      parameters: t.parameters,
+      parameters: t.parameters as any,
       execute: t.execute,
     })
   })
@@ -75,18 +75,14 @@ async function getHandoffAgent(worker: HandoffAgentWorker, p: AgentParameters): 
   hoa.on("agent_handoff", (ctx, agent) => {
     const message = `Handoff Worker handoff to Agent with description '${agent.handoffDescription}'`
     p.agent.log({ type: "handoff", message, })
-
-    console.log(message)
   })
   hoa.on("agent_tool_start", (ctx, b) => {
     const message = `Handoff Worker Starts invoking Tool '${b.name}'`
     p.agent.log({ type: "tool_start", message, })
-    console.log(message, b, ctx)
   })
   hoa.on("agent_tool_end", (ctx, b) => {
     const message = `Handoff Worker Ends invoking Tool '${b.name}'`
     p.agent.log({ type: "tool_end", message, })
-    console.log(message, b, ctx)
   })
 
   return hoa
@@ -97,6 +93,7 @@ export const handoffAgent: WorkerRegistryItem = {
   execute,
   category: "generator",
   type: "handoffAgent",
+  deprecated: true,
   description: "Specialized agent worker for handling handoffs and routing.",
   create(agent: Agent) {
 

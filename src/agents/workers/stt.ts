@@ -1,4 +1,5 @@
 import OpenAI from "openai"
+import axios from "axios"
 
 declare global {
   type STTEngine = "whisper-1"
@@ -14,31 +15,78 @@ declare global {
 }
 
 async function execute(worker: STTWorker, { apiKeys }: AgentParameters) {
+  const inputValue = worker.fields.input.value
+  
+  if (!inputValue) return
 
-  worker.fields.output.value = ""
+  // Handle different input formats
+  let audioFile: File | null = null
+  let audioExt = 'mp3'
+  
+  // Check if it's already in the expected format { audio: base64, ext: string }
+  if (inputValue && typeof inputValue === 'object' && 'audio' in inputValue && 'ext' in inputValue) {
+    const audio = inputValue as { audio: string, ext: string }
+    audioExt = (audio.ext || 'mp3') as string
+    
+    // Decode base64 to binary
+    const binaryString = atob(audio.audio)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    audioFile = new File([bytes], `audio.${audioExt}`, { type: `audio/${audioExt}` })
+  } else if (typeof inputValue === 'string') {
+    // If it's a URL string (from Content worker), fetch it directly
+    if (inputValue.startsWith('http://') || inputValue.startsWith('https://') || inputValue.startsWith('data:')) {
+      // Fetch the audio file using axios
+      const response = await axios.get(inputValue, {
+        responseType: 'arraybuffer'
+      })
+      
+      // Determine extension from Content-Type header or URL
+      const contentType = response.headers['content-type']
+      if (contentType?.startsWith('audio/')) {
+        const mimeMatch = contentType.match(/audio\/([^;]+)/)
+        if (mimeMatch) {
+          audioExt = mimeMatch[1].split('+')[0] // Handle audio/ogg; codecs=opus
+        }
+      } else if (inputValue.startsWith('data:')) {
+        const dataMatch = inputValue.match(/data:audio\/([^;]+)/)
+        if (dataMatch) audioExt = dataMatch[1]
+      } else {
+        // Fallback: extract from URL pathname
+        try {
+          const url = new URL(inputValue)
+          const pathname = url.pathname
+          const extMatch = pathname.match(/\.([^.]+)$/)
+          if (extMatch) audioExt = extMatch[1]
+        } catch {
+          // Invalid URL, keep default mp3
+        }
+      }
+      
+      const bytes = new Uint8Array(response.data)
+      audioFile = new File([bytes], `audio.${audioExt}`, { type: contentType || `audio/${audioExt}` })
+    } else {
+      throw new Error(`Invalid audio input format. Expected object with {audio, ext} or URL string`)
+    }
+  } else {
+    throw new Error(`Invalid audio input format. Expected object with {audio, ext} or URL string`)
+  }
 
-  const audio = worker.fields.input.value as { audio: string, ext: string }
-
-  if (!audio) return
+  if (!audioFile) {
+    throw new Error("Failed to create audio file")
+  }
 
   const engine = worker.parameters.engine || "whisper-1"
   const openai = new OpenAI({ apiKey: apiKeys.openai, dangerouslyAllowBrowser: true })
 
-  const binaryString = atob(audio.audio)
-  const bytes = new Uint8Array(binaryString.length)
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i)
-  }
-  const file = new File([bytes], `audio.${audio.ext}`, { type: `audio/${audio.ext}` })
-
   const response = await openai.audio.transcriptions.create({
-    file,
+    file: audioFile,
     model: engine,
   })
 
-  const message = response.text
-
-  worker.fields.output.value = message
+  worker.fields.output.value = response.text
 }
 
 

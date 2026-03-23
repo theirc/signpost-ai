@@ -1,6 +1,7 @@
 import { ulid } from "ulid"
 import { loadAgent } from "./agentfactory"
 import { ZodObject } from "zod"
+import cloneDeep from "lodash/cloneDeep"
 
 export const inputOutputTypes = {
   string: "Text",
@@ -70,6 +71,7 @@ declare global {
   }
 
   interface ToolConfig {
+    name?: string
     description?: string
     parameters?: ZodObject<any>
     execute?(args: any, ctx?: any): Promise<string>
@@ -213,9 +215,11 @@ export function buildWorker(w: WorkerConfig) {
       const tools: ToolConfig[] = []
 
       for (const c of connected) {
-        const { description, parameters, execute } = c.getTool(c, p)
+        const cfg = c.getTool(c, p)
+        const { name, description, parameters, execute } = cfg
         if (!description) throw new Error(`Worker does not have a Tool Description parameter set. Please set it to describe the tool's purpose.`)
         tools.push({
+          name,
           description,
           parameters,
           execute,
@@ -248,6 +252,13 @@ export function buildWorker(w: WorkerConfig) {
         if (operator === "notContains") return !conditionValue1.includes(value)
         if (operator === "isEmpty") return value == ""
         if (operator === "isNotEmpty") return value != ""
+      }
+
+      if (type === "string[]") {
+        value ||= []
+        if (!Array.isArray(value)) value = [value]
+        if (operator === "isEmpty") return value.length == 0
+        if (operator === "isNotEmpty") return value.length > 0
       }
 
       if (type === "number") {
@@ -425,14 +436,14 @@ export function buildWorker(w: WorkerConfig) {
       if (!worker.parameters || !worker.parameters.agent) return
 
       if (!teamId) {
-        console.warn(`Cannot load referenced agent ${worker.parameters.agent} without team ID`)
+        console.error(`Cannot load referenced agent ${worker.parameters.agent} without team ID`)
         return
       }
 
       const agent = await loadAgent(worker.parameters.agent, teamId)
 
       if (!agent) {
-        console.warn(`Referenced agent ${worker.parameters.agent} not found or not accessible for current team`)
+        console.error(`Referenced agent ${worker.parameters.agent} not found or not accessible for current team`)
         return
       }
 
@@ -441,7 +452,14 @@ export function buildWorker(w: WorkerConfig) {
       if (!inp || !out) return
 
       worker.referencedAgent = agent
-      w.handles = {}
+
+      const keepHandles = {}
+
+      for (const h of worker.handlersArray) {
+        keepHandles[h.id] = h
+      }
+
+      w.handles = keepHandles
 
       for (const h of Object.values(inp.handles)) {
         h.direction = "input"
@@ -453,9 +471,29 @@ export function buildWorker(w: WorkerConfig) {
       }
 
       worker.updateWorker()
-      console.log("Worker Referenced Agent Loaded: ", worker.referencedAgent)
+      console.log(`Worker Referenced Agent Loaded ${worker?.referencedAgent?.title}`)
     },
 
+    clone(a: any) {
+      const agent: Agent = a
+      const nworker = worker.registry.create(agent)
+
+      nworker.config.x = worker.config.x + 200
+      nworker.config.y = worker.config.y + 200
+
+      const clonedHandles = cloneDeep(worker.getUserHandlers())
+
+      for (const h of clonedHandles) {
+        delete h.id
+      }
+      nworker.addHandlers(clonedHandles)
+
+      const cloneParameters = cloneDeep(worker.parameters)
+      nworker.parameters = cloneParameters
+      nworker.config.parameters = cloneParameters
+
+      return nworker
+    }
 
   }
 

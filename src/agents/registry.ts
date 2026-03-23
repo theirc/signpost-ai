@@ -22,6 +22,13 @@ import { chatHistory } from "./workers/chathistory"
 import { structured } from "./workers/structuredoutput"
 import { tooltip } from "./workers/tooltip"
 import { message } from "./workers/message"
+import { vectorSearch } from "./workers/vectorsearch"
+import { onboard } from "./workers/onboard"
+import { lookup } from "./workers/lookup"
+import { languageDetection } from "./workers/languagedetection"
+import { hitl } from "./workers/hitl"
+import { vision } from "./workers/vision"
+import { externalApiConnector } from "./workers/externalApiConnector"
 
 
 type WorkerCategories = "io" | "generator" | "debug" | "tool"
@@ -39,6 +46,7 @@ declare global {
     execute(worker: AIWorker, p: AgentParameters): Promise<void>
     create(agent: Agent): AIWorker
     registry?: this
+    deprecated?: boolean
   }
 
 }
@@ -72,5 +80,13 @@ export const workerRegistry = {
   chatHistory,
   tooltip,
   message,
+
+  vectorSearch,
+  onboard,
+  lookup,
+  languageDetection,
+  hitl,
+  vision,
+  externalApiConnector,
 
 } satisfies { [index: string]: WorkerRegistryItem }

@@ -19,11 +19,11 @@ async function execute(worker: AgentWorker, p: AgentParameters) {
 
   const locp = {
     ...p,
-    debug: false,
+    // debug: false,
     agent,
     input: {}
   }
-  console.log("Agent Worker Execute Parameters: ", locp)
+
 
   for (const h of worker.handlersArray) {
     if (h.direction === "input") {
@@ -33,7 +33,6 @@ async function execute(worker: AgentWorker, p: AgentParameters) {
 
   await agent.execute(locp)
 
-  console.log("Agent Worker result: ", locp.output)
 
   for (const h of worker.handlersArray) {
     if (h.direction === "output") {

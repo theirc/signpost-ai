@@ -34,11 +34,15 @@ async function execute(worker: TemplateWorker, p: AgentParameters) {
     if (!h.value) continue
     values[h.name] = h.value
   }
-  console.log("userFields", values)
+
+  // Register Handlebars helpers
+  Handlebars.registerHelper('includes', function (str, search) {
+    if (typeof str !== 'string') return false
+    return str.includes(search)
+  })
 
   const template = Handlebars.compile(templateText)
   const result = template(values)
-  console.log(result)
 
   worker.fields.output.value = result
 
