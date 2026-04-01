@@ -10,7 +10,7 @@ declare global {
   type IntegrationsTypes = "telerivet" | "app"
 
   interface IntegrationPayload {
-    contact?: string //cross channel unique user id. If empty is created based on the integration.
+    contact?: string //cross channel unique user id. If empty is created based on the integration data, usually the phone.
     type?: IntegrationsTypes
     name?: string
     phone?: string
@@ -61,6 +61,7 @@ declare global {
     integration?: IntegrationPayload
     state?: AgentState
     logWriter?: (p: { worker: AIWorker, state: any }) => void
+    commandExecuted?: "reset"
   }
 }
 

@@ -13,7 +13,6 @@
     "allowUnreachableCode": true,
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
-    "alwaysStrict": false,
     "verbatimModuleSyntax": false,
     "sourceMap": true,
     "allowJs": true,

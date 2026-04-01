@@ -41,6 +41,7 @@ export type Database = {
     Tables: {
       agents: {
         Row: {
+          config: Json | null
           created_at: string
           debuguuid: string | null
           description: string | null
@@ -56,6 +57,7 @@ export type Database = {
           workers: Json | null
         }
         Insert: {
+          config?: Json | null
           created_at?: string
           debuguuid?: string | null
           description?: string | null
@@ -71,6 +73,7 @@ export type Database = {
           workers?: Json | null
         }
         Update: {
+          config?: Json | null
           created_at?: string
           debuguuid?: string | null
           description?: string | null
@@ -330,8 +333,15 @@ export type Database = {
           code: string | null
           created_at: string
           data: string | null
+          evaluation: Json | null
+          extractions: Json
           id: string
+          internal_comments: Json | null
+          lasteval: string | null
           name: string | null
+          no_reply_needed: boolean | null
+          severity: number | null
+          summary: string | null
           team: string | null
           type: string | null
         }
@@ -340,8 +350,15 @@ export type Database = {
           code?: string | null
           created_at?: string
           data?: string | null
+          evaluation?: Json | null
+          extractions?: Json
           id: string
+          internal_comments?: Json | null
+          lasteval?: string | null
           name?: string | null
+          no_reply_needed?: boolean | null
+          severity?: number | null
+          summary?: string | null
           team?: string | null
           type?: string | null
         }
@@ -350,8 +367,15 @@ export type Database = {
           code?: string | null
           created_at?: string
           data?: string | null
+          evaluation?: Json | null
+          extractions?: Json
           id?: string
+          internal_comments?: Json | null
+          lasteval?: string | null
           name?: string | null
+          no_reply_needed?: boolean | null
+          severity?: number | null
+          summary?: string | null
           team?: string | null
           type?: string | null
         }
@@ -393,6 +417,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      eval_categories: {
+        Row: {
+          applies_to: string | null
+          created_at: string
+          description: string | null
+          id: number
+          name: string | null
+        }
+        Insert: {
+          applies_to?: string | null
+          created_at?: string
+          description?: string | null
+          id?: number
+          name?: string | null
+        }
+        Update: {
+          applies_to?: string | null
+          created_at?: string
+          description?: string | null
+          id?: number
+          name?: string | null
+        }
+        Relationships: []
       }
       eval_configs: {
         Row: {
@@ -499,6 +547,56 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      eval_items: {
+        Row: {
+          askhuman: boolean | null
+          category: number | null
+          created_at: string
+          description: string | null
+          highrisk: boolean | null
+          id: number
+          key_signals: string | null
+          lowconf: boolean | null
+          name: string | null
+          type: string | null
+          weight: number | null
+        }
+        Insert: {
+          askhuman?: boolean | null
+          category?: number | null
+          created_at?: string
+          description?: string | null
+          highrisk?: boolean | null
+          id?: number
+          key_signals?: string | null
+          lowconf?: boolean | null
+          name?: string | null
+          type?: string | null
+          weight?: number | null
+        }
+        Update: {
+          askhuman?: boolean | null
+          category?: number | null
+          created_at?: string
+          description?: string | null
+          highrisk?: boolean | null
+          id?: number
+          key_signals?: string | null
+          lowconf?: boolean | null
+          name?: string | null
+          type?: string | null
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "eval_items_category_fkey"
+            columns: ["category"]
+            isOneToOne: false
+            referencedRelation: "eval_categories"
             referencedColumns: ["id"]
           },
         ]
@@ -891,36 +989,75 @@ export type Database = {
       messages: {
         Row: {
           agent: number | null
+          agent_appropriate: boolean | null
+          agent_concern_level: number | null
+          agent_detected_items: Json | null
+          agent_reasoning: string | null
           channel: string | null
           contact: string | null
           created_at: string
+          escalation_detected: boolean | null
+          escalation_from_level: number | null
+          escalation_reasoning: string | null
+          escalation_to_level: number | null
+          extractions: Json
           id: string
           message: string | null
+          narrative_update: string | null
+          rating: string | null
+          rating_example: string | null
           role: string | null
           sender: string | null
           team: string | null
+          user_detected_items: Json | null
         }
         Insert: {
           agent?: number | null
+          agent_appropriate?: boolean | null
+          agent_concern_level?: number | null
+          agent_detected_items?: Json | null
+          agent_reasoning?: string | null
           channel?: string | null
           contact?: string | null
           created_at?: string
+          escalation_detected?: boolean | null
+          escalation_from_level?: number | null
+          escalation_reasoning?: string | null
+          escalation_to_level?: number | null
+          extractions?: Json
           id?: string
           message?: string | null
+          narrative_update?: string | null
+          rating?: string | null
+          rating_example?: string | null
           role?: string | null
           sender?: string | null
           team?: string | null
+          user_detected_items?: Json | null
         }
         Update: {
           agent?: number | null
+          agent_appropriate?: boolean | null
+          agent_concern_level?: number | null
+          agent_detected_items?: Json | null
+          agent_reasoning?: string | null
           channel?: string | null
           contact?: string | null
           created_at?: string
+          escalation_detected?: boolean | null
+          escalation_from_level?: number | null
+          escalation_reasoning?: string | null
+          escalation_to_level?: number | null
+          extractions?: Json
           id?: string
           message?: string | null
+          narrative_update?: string | null
+          rating?: string | null
+          rating_example?: string | null
           role?: string | null
           sender?: string | null
           team?: string | null
+          user_detected_items?: Json | null
         }
         Relationships: [
           {
