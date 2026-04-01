@@ -4,6 +4,7 @@ import { buildWorker } from "./worker"
 import { ulid } from 'ulid'
 import { ApiWorker } from "./workers/api"
 import { integrations } from "./integrations"
+import { evaluate, updateContact } from "./evals/evals"
 
 type LogTypes = "execution" | "error" | "info" | "handoff" | "tool_start" | "tool_end"
 
@@ -17,6 +18,9 @@ interface AgentConfig {
   team_id?: string
   debuguuid?: string
   versions?: AgentVersion[]
+  config?: {
+    evalItems?: number[]
+  }
   fork_id?: number | string | null
   fork_base?: AgentConfig | null
 }
@@ -91,6 +95,7 @@ export function createAgent(config: AgentConfig) {
     edges,
     workers,
     displayData: true,
+    evalItems: [] as number[],
 
     parameters: {} as AgentParameters,
     type: "data" as AgentTypes,
@@ -247,6 +252,7 @@ export function createAgent(config: AgentConfig) {
       }
     },
 
+
     async execute(p: AgentParameters) {
 
       // ───── Intialization ───────────────────────────────────────────────────────
@@ -263,20 +269,33 @@ export function createAgent(config: AgentConfig) {
       p.logWriter ||= () => { }
       p.agent = agent
       p.integration ||= {}
-      const message: string = p.input.message
-
 
       if (p.debug && agent.debuguuid && !p.uid) p.uid = agent.debuguuid
+
+      const message: string = p.input.message
+      let contact: Contact = null
+
       agent.parameters = p
 
 
+      // ───── Contact Detection ───────────────────────────────────────────────────────
+
+      if (p.integration && p.apiKeys.codec) contact = await integrations.getOrCreateContact(p.integration, p.apiKeys.codec, p.team)
+
+      // ───── Commands ───────────────────────────────────────────────────────
+
       if (message && message.trim().toLowerCase() === "/reset") {
-        agent.resetAgent(p.uid)
+        await agent.resetAgent(p.uid, contact?.id)
         p.output.response = "The chat history and state has been reset."
+        p.commandExecuted = "reset"
         agent.currentWorker = null
         agent.update()
+        console.log("The chat history and state has been reset.")
         return
       }
+
+
+      // ───── Clean Workers ───────────────────────────────────────────────────────
 
       for (const key in agent.workers) {
         const w = agent.workers[key]
@@ -300,17 +319,19 @@ export function createAgent(config: AgentConfig) {
 
       // ───── Message and Contact ────────────────────────────────────────
 
+      let userMessageId: string = null
+
       try {
-        if (p.integration && p.apiKeys && p.apiKeys.codec && message) {
-          p.integration.contact = await integrations.saveMessage({
-            integration: p.integration,
-            password: p.apiKeys.codec,
-            contact: p.integration.contact,
-            team: p.team,
+        if (contact && message) {
+          const { data: userMessage } = await supabase.from("messages").insert({
+            contact: contact.id,
             role: "user",
             message,
-            agent: agent.id
-          })
+            channel: p.integration.type,
+            team: p.team,
+            agent: agent.id,
+          } satisfies Message).select().single()
+          userMessageId = userMessage.id
         }
       } catch (error) {
         console.error("Error saving integration contact:", error)
@@ -364,22 +385,53 @@ export function createAgent(config: AgentConfig) {
 
       // ───── Message and Contact ────────────────────────────────────────
 
-      try {
-        if (p.integration && p.integration && p.apiKeys && p.apiKeys.codec && p.output?.response) {
+      const response = p.output?.response
+      let agentMessageId: string = null
 
-          await integrations.saveMessage({
-            integration: p.integration,
-            password: p.apiKeys.codec,
-            contact: p.integration.contact,
-            team: p.team,
+      try {
+
+        if (contact && response) {
+
+          const { data: agentMessage } = await supabase.from("messages").insert({
+            contact: contact.id,
             role: "assistant",
-            message: p.output?.response,
-            agent: agent.id
-          })
-        } else {
+            message: response,
+            channel: p.integration.type,
+            team: p.team,
+            agent: agent.id,
+          } satisfies Message).select().single()
+
+          agentMessageId = agentMessage.id
+
         }
+
+        // if (p.integration && p.integration.contact && p.apiKeys && p.apiKeys.codec && response) {
+        //   const { messageId } = await integrations.saveMessage({
+        //     integration: p.integration,
+        //     password: p.apiKeys.codec,
+        //     contact: p.integration.contact,
+        //     team: p.team,
+        //     role: "assistant",
+        //     message: p.output?.response,
+        //     agent: agent.id
+        //   })
+        //   agentMessageId = messageId
+        // }
       } catch (err) {
-        console.error("Error saving integration contact:", err)
+        console.error("Error saving integration contact and meessage:", err)
+      }
+
+      // ───── Evaluations ────────────────────────────────────────
+
+      if (contact && message && response && agent.evalItems?.length && userMessageId && agentMessageId) {
+
+        if (p.debug) {
+          await agent.updateEvaluations(contact, message, response, userMessageId, agentMessageId, p.apiKeys)
+        } else {
+          setTimeout(async () => {
+            await agent.updateEvaluations(contact, message, response, userMessageId, agentMessageId, p.apiKeys)
+          }, 1)
+        }
       }
 
       // ───── End ───────────────────────────────────────────────────────
@@ -392,6 +444,46 @@ export function createAgent(config: AgentConfig) {
       agent.currentWorker = null
       agent.update()
 
+    },
+
+    async updateEvaluations(contact: Contact, message: string, response: string, userMessageId: string, agentMessageId: string, apiKeys: APIKeys) {
+      try {
+
+        const { data: messages, error: messageError } = await supabase.from("messages").select().eq("contact", contact.id).order("created_at", { ascending: true }).limit(10)
+        if (messageError) throw messageError
+        const { data: items, error: itemsError } = await supabase.from("eval_items").select().in("id", agent.evalItems)
+        if (itemsError) throw itemsError
+
+        const result = await evaluate(message, response, messages as any, contact, items as any, apiKeys)
+
+        contact = updateContact(contact, result, items as any)
+
+        await supabase.from("messages").update({
+          user_detected_items: result.detectedItems || null,
+          escalation_from_level: result.escalation?.fromLevel || null,
+          escalation_to_level: result.escalation?.toLevel || null,
+          escalation_reasoning: result.escalation?.reasoning || null,
+        }).eq('id', userMessageId)
+
+        await supabase.from("messages").update({
+          agent_appropriate: result.agentEvaluation?.appropriate || false,
+          agent_concern_level: result.agentEvaluation?.concernLevel || null,
+          agent_reasoning: result.agentEvaluation?.reasoning || null,
+          narrative_update: (result.narrativeUpdate?.shouldUpdate && result.narrativeUpdate?.newSummary) ? result.narrativeUpdate?.newSummary : null,
+          agent_detected_items: result.agentEvaluation?.detectedItems || null,
+        }).eq('id', agentMessageId)
+
+        await supabase.from('contacts').update({
+          evaluation: contact.evaluation as any || null,
+          severity: contact.severity || null,
+          lasteval: new Date().toISOString(),
+          summary: contact.summary || null,
+        }).eq('id', contact.id)
+
+
+      } catch (error) {
+        console.error("Error during Evaluation:", error)
+      }
     },
 
     async log(l: AgentLog) {
@@ -421,7 +513,6 @@ export function createAgent(config: AgentConfig) {
 
     addWorker(w: WorkerConfig): AIWorker {
       const nameType = w.type?.toUpperCase() || "NODE"
-
       w.id ||= `${nameType}_${ulid()}`
       w.handles ||= {}
       const worker = buildWorker(w)
@@ -433,10 +524,19 @@ export function createAgent(config: AgentConfig) {
       delete workers[id]
     },
 
-    async resetAgent(uid: string) {
+    async resetAgent(uid: string, contactId?: string) {
       await supabase.from("states").delete().eq("id", uid)
       await supabase.from("history").delete().eq("uid", uid)
       await supabase.from("events").delete().eq("id", uid)
+      if (contactId) {
+        await supabase.from('contacts').update({
+          evaluation: null,
+          severity: 0,
+          lasteval: null,
+          summary: null,
+        }).eq('id', contactId)
+        await supabase.from("messages").delete().eq("contact", contactId)
+      }
     },
 
   }
@@ -452,6 +552,7 @@ export function configureAgent(data: AgentConfig) {
   agent.type = data.type || "data"
   agent.description = data.description || ""
   agent.versions = data.versions || []
+  agent.evalItems = data.config?.evalItems || []
 
 
   for (const w of workers) {
@@ -506,6 +607,9 @@ export function getAgentToSave(agent: Agent, team_id?: string) {
     edges: agent.edges,
     team_id,
     debuguuid: agent.debuguuid || "",
+    config: {
+      evalItems: agent.evalItems || []
+    }
   }
   const workerlist = []
 
@@ -576,10 +680,10 @@ export function loadVersion(version: number, agent: Agent) {
 
 export async function saveAgent(agent: Agent, team_id?: string) {
 
-  debugger
   const agentData = getAgentToSave(agent, team_id)
   agentData.versions = agent.versions
-
+  agentData.config ||= {}
+  agentData.config.evalItems = agent.evalItems || []
 
   if (agent.id) {
     await supabase.from("agents").update(agentData as any).eq("id", agent.id)
@@ -834,6 +938,7 @@ export async function mergeAgentIntoOriginal(forkedAgent: Agent, team_id: string
 }
 
 export async function loadAgent(id: number, teamId: string): Promise<Agent | null> {
+
   if (!teamId) {
     throw new Error("No team ID provided")
   }
@@ -864,6 +969,9 @@ export async function loadAgent(id: number, teamId: string): Promise<Agent | nul
       await w.loadAgent(teamId)
     }
   }
+
+  console.log(agent.evalItems)
+
 
   return agent
 }
