@@ -510,12 +510,11 @@ async function uploadFileTemporarily(fileData: { buffer: Uint8Array, mimeType: s
     // Convert buffer to File/Blob for upload
     const fileBlob = new Blob([new Uint8Array(buffer)], { type: mimeType })
 
-    // Upload to Supabase storage
     const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('documents')
+      .from('temp')
       .upload(tempFileName, fileBlob, {
-        cacheControl: '300', // Cache for 5 minutes
-        upsert: false // Don't overwrite, each upload should be unique
+        cacheControl: '300',
+        upsert: false
       })
 
     if (uploadError) {
@@ -523,27 +522,9 @@ async function uploadFileTemporarily(fileData: { buffer: Uint8Array, mimeType: s
       return null
     }
 
-    // Create signed URL that expires in 5 minutes
-    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-      .from('documents')
-      .createSignedUrl(uploadData.path, 300)
+    const { data: urlData } = supabase.storage.from('temp').getPublicUrl(uploadData.path)
 
-    if (signedUrlError) {
-      console.error('Signed URL creation error:', signedUrlError)
-      return null
-    }
-
-
-    // Schedule cleanup after 6 minutes (1 minute buffer)
-    setTimeout(async () => {
-      try {
-        await supabase.storage.from('documents').remove([uploadData.path])
-      } catch (cleanupError) {
-        console.error('Error cleaning up temporary document:', cleanupError)
-      }
-    }, 360000) // 6 minutes
-
-    return signedUrlData.signedUrl
+    return urlData.publicUrl
 
   } catch (error) {
     console.error('Error uploading document:', error)
