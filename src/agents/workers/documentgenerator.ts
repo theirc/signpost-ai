@@ -12,9 +12,11 @@ declare global {
 
 export type { DocumentGeneratorWorker }
 
-import { jsPDF } from 'jspdf'
-import { marked, type Token } from 'marked'
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, convertInchesToTwip } from 'docx'
+import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
+import { marked } from 'marked'
+
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, convertInchesToTwip } from 'docx'
 
 function extractTitle(content: string): string {
   if (!content) return 'generated'
@@ -99,353 +101,201 @@ function generateCsv(content: string): Uint8Array {
   return new TextEncoder().encode(csvContent)
 }
 
-interface PdfSegment {
-  text: string
-  font: string
-  style: string
-  size: number
-}
-
-interface PdfLayout {
-  pdf: jsPDF
-  y: number
-  maxY: number
-  contentWidth: number
-}
-
-const PDF_HEADING_SIZES = [22, 18, 15, 13, 11, 10] as const
-const PDF_BODY = 10
-const PDF_CODE = 9
-const PDF_LH = 1.5
-const PDF_PT_MM = 0.352778
-const PDF_M = { top: 20, left: 20, right: 20, bottom: 20 }
-
-function pdfLh(fs: number): number {
-  return fs * PDF_LH * PDF_PT_MM
-}
-
-function pdfStyle(bold: boolean, italic: boolean): string {
-  if (bold && italic) return 'bolditalic'
-  if (bold) return 'bold'
-  if (italic) return 'italic'
-  return 'normal'
-}
-
-function pdfDecodeEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&amp;/g, '&')
-    .replace(/&emsp;/g, '    ')
-    .replace(/&ensp;/g, '  ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&thinsp;/g, ' ')
-    .replace(/&mdash;/g, '--')
-    .replace(/&ndash;/g, '-')
-    .replace(/&hellip;/g, '...')
-    .replace(/&bull;/g, '-')
-    .replace(/&rarr;/g, '->')
-    .replace(/&larr;/g, '<-')
-    .replace(/&copy;/g, '(c)')
-    .replace(/&reg;/g, '(R)')
-    .replace(/&trade;/g, '(TM)')
-    .replace(/&deg;/g, ' deg')
-    .replace(/&[a-zA-Z]+;/g, ' ')
-    .replace(/&#(\d+);/g, (_, c) => {
-      const n = Number(c)
-      return (n >= 0x20 && n <= 0x7E) || (n >= 0xA0 && n <= 0xFF) ? String.fromCharCode(n) : ''
-    })
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => {
-      const n = parseInt(h, 16)
-      return (n >= 0x20 && n <= 0x7E) || (n >= 0xA0 && n <= 0xFF) ? String.fromCharCode(n) : ''
-    })
-}
-
-function pdfStripUnicode(text: string): string {
-  return text
-    .replace(/[\u2192\u2794\u27A1]/g, '->')
-    .replace(/\u2190/g, '<-')
-    .replace(/\u2194/g, '<->')
-    .replace(/[\u2080-\u2089]/g, ch => String(ch.charCodeAt(0) - 0x2080))
-    .replace(/\u00B2/g, '2')
-    .replace(/\u00B3/g, '3')
-    .replace(/\u00B9/g, '1')
-    .replace(/[\u2074-\u2079]/g, ch => String(ch.charCodeAt(0) - 0x2070))
-    .replace(
-      /[^\t\n\r\x20-\x7E\xA0-\xFF\u2018\u2019\u201C\u201D\u2022\u2013\u2014\u2026\u20AC]/gu,
-      ''
-    )
-}
-
-function pdfPreClean(md: string): string {
-  let r = md
-  r = r.replace(/<!--[\s\S]*?-->/g, '')
-  r = r.replace(/<br\s*\/?>/gi, '\n')
-  r = r.replace(/<[^>]+>/g, '')
-  r = pdfDecodeEntities(r)
-  r = pdfStripUnicode(r)
-  return r
-}
-
-function pdfClean(text: string): string {
-  let r = text
-  r = r.replace(/<!--[\s\S]*?-->/g, '')
-  r = r.replace(/<br\s*\/?>/gi, '\n')
-  r = r.replace(/<[^>]+>/g, '')
-  r = pdfDecodeEntities(r)
-  r = pdfStripUnicode(r)
-  return r
-}
-
-function pdfFlatten(tokens: Token[], bold = false, italic = false, sz = PDF_BODY): PdfSegment[] {
-  const out: PdfSegment[] = []
-  for (const t of tokens) {
-    switch (t.type) {
-      case 'text':
-        if (t.tokens && t.tokens.length > 0) {
-          out.push(...pdfFlatten(t.tokens, bold, italic, sz))
-        } else {
-          out.push({ text: pdfClean(t.text), font: 'helvetica', style: pdfStyle(bold, italic), size: sz })
-        }
-        break
-      case 'strong':
-        out.push(...pdfFlatten(t.tokens, true, italic, sz))
-        break
-      case 'em':
-        out.push(...pdfFlatten(t.tokens, bold, true, sz))
-        break
-      case 'codespan':
-        out.push({ text: pdfClean(t.text), font: 'courier', style: 'normal', size: PDF_CODE })
-        break
-      case 'link':
-        out.push(...pdfFlatten(t.tokens, bold, italic, sz))
-        break
-      case 'br':
-        out.push({ text: '\n', font: 'helvetica', style: 'normal', size: sz })
-        break
-      default:
-        if ('tokens' in t && Array.isArray(t.tokens)) {
-          out.push(...pdfFlatten(t.tokens as Token[], bold, italic, sz))
-        } else if ('text' in t && typeof t.text === 'string') {
-          out.push({ text: pdfClean(t.text), font: 'helvetica', style: pdfStyle(bold, italic), size: sz })
-        }
-    }
-  }
-  return out
-}
-
-function pdfEnsure(s: PdfLayout, h: number): void {
-  if (s.y + h > s.maxY) {
-    s.pdf.addPage()
-    s.y = PDF_M.top
-  }
-}
-
-function pdfDrawSegs(s: PdfLayout, segs: PdfSegment[], indent = 0): void {
-  const sx = PDF_M.left + indent
-  const mx = PDF_M.left + s.contentWidth
-  let x = sx
-
-  for (const seg of segs) {
-    s.pdf.setFont(seg.font, seg.style)
-    s.pdf.setFontSize(seg.size)
-    const h = pdfLh(seg.size)
-
-    const lines = pdfClean(seg.text).split('\n')
-    for (let li = 0; li < lines.length; li++) {
-      if (li > 0) {
-        s.y += h
-        pdfEnsure(s, h)
-        x = sx
-      }
-      const words = lines[li].split(/( +)/).filter(Boolean)
-      for (const word of words) {
-        const w = s.pdf.getTextWidth(word)
-        if (x + w > mx && x > sx) {
-          s.y += h
-          pdfEnsure(s, h)
-          x = sx
-          if (!word.trim()) continue
-        }
-        s.pdf.text(word, x, s.y)
-        x += w
-      }
-    }
-  }
-
-  const lastSz = segs.length > 0 ? segs[segs.length - 1].size : PDF_BODY
-  s.y += pdfLh(lastSz)
-}
-
-function pdfRenderBlocks(s: PdfLayout, tokens: Token[]): void {
-  for (const token of tokens) {
-    switch (token.type) {
-      case 'heading': {
-        const fs = PDF_HEADING_SIZES[token.depth - 1] ?? 10
-        const h = pdfLh(fs)
-        s.y += 3
-        pdfEnsure(s, h + 4)
-        pdfDrawSegs(s, pdfFlatten(token.tokens, true, false, fs))
-        if (token.depth <= 2) {
-          s.pdf.setDrawColor(189, 195, 199)
-          s.pdf.setLineWidth(token.depth === 1 ? 0.5 : 0.3)
-          s.pdf.line(PDF_M.left, s.y - 1, PDF_M.left + s.contentWidth, s.y - 1)
-          s.y += 2
-        }
-        s.y += 1
-        break
-      }
-
-      case 'html': {
-        break
-      }
-
-      case 'paragraph': {
-        pdfEnsure(s, pdfLh(PDF_BODY))
-        pdfDrawSegs(s, pdfFlatten(token.tokens))
-        s.y += 2
-        break
-      }
-
-      case 'list': {
-        for (let i = 0; i < token.items.length; i++) {
-          const item = token.items[i]
-          pdfEnsure(s, pdfLh(PDF_BODY))
-          s.pdf.setFont('helvetica', 'normal')
-          s.pdf.setFontSize(PDF_BODY)
-          const startNum = typeof token.start === 'number' ? token.start : 1
-          const marker = token.ordered ? `${startNum + i}.` : '\u2022'
-          s.pdf.text(marker, PDF_M.left, s.y)
-
-          for (const sub of item.tokens) {
-            if ('tokens' in sub && Array.isArray(sub.tokens)) {
-              pdfDrawSegs(s, pdfFlatten(sub.tokens as Token[]), 8)
-            } else if ('text' in sub && typeof sub.text === 'string') {
-              pdfDrawSegs(s, [{ text: pdfClean(sub.text), font: 'helvetica', style: 'normal', size: PDF_BODY }], 8)
-            }
-          }
-        }
-        s.y += 2
-        break
-      }
-
-      case 'code': {
-        const h = pdfLh(PDF_CODE)
-        const codeLines = pdfClean(token.text).split('\n')
-        const blockH = codeLines.length * h + 6
-        pdfEnsure(s, Math.min(blockH, 40))
-        s.pdf.setFillColor(248, 249, 250)
-        s.pdf.setDrawColor(233, 236, 239)
-        s.pdf.roundedRect(PDF_M.left, s.y - 3, s.contentWidth, blockH, 1, 1, 'FD')
-        s.y += 1
-        s.pdf.setFont('courier', 'normal')
-        s.pdf.setFontSize(PDF_CODE)
-        s.pdf.setTextColor(51, 51, 51)
-        for (const codeLine of codeLines) {
-          pdfEnsure(s, h)
-          s.pdf.text(codeLine.substring(0, 120), PDF_M.left + 3, s.y)
-          s.y += h
-        }
-        s.pdf.setTextColor(0, 0, 0)
-        s.y += 4
-        break
-      }
-
-      case 'blockquote': {
-        const startY = s.y
-        s.pdf.setTextColor(85, 85, 85)
-        for (const sub of token.tokens) {
-          if (sub.type === 'paragraph' && sub.tokens) {
-            pdfDrawSegs(s, pdfFlatten(sub.tokens, false, true), 6)
-          }
-        }
-        s.pdf.setTextColor(0, 0, 0)
-        s.pdf.setDrawColor(52, 152, 219)
-        s.pdf.setLineWidth(1)
-        s.pdf.line(PDF_M.left + 2, startY - 3, PDF_M.left + 2, s.y - 1)
-        s.y += 2
-        break
-      }
-
-      case 'hr': {
-        pdfEnsure(s, 6)
-        s.y += 3
-        s.pdf.setDrawColor(189, 195, 199)
-        s.pdf.setLineWidth(0.3)
-        s.pdf.line(PDF_M.left, s.y, PDF_M.left + s.contentWidth, s.y)
-        s.y += 3
-        break
-      }
-
-      case 'space': {
-        s.y += 3
-        break
-      }
-
-      case 'table': {
-        const cols = token.header.length
-        if (cols === 0) break
-        const colWidth = s.contentWidth / cols
-        const h = pdfLh(PDF_BODY)
-        pdfEnsure(s, h * 2)
-        s.pdf.setFont('helvetica', 'bold')
-        s.pdf.setFontSize(PDF_BODY)
-        s.pdf.setFillColor(240, 240, 240)
-        s.pdf.rect(PDF_M.left, s.y - 3, s.contentWidth, h + 2, 'F')
-        for (let c = 0; c < cols; c++) {
-          s.pdf.text(pdfClean(token.header[c].text).substring(0, 30), PDF_M.left + c * colWidth + 2, s.y)
-        }
-        s.y += h + 1
-        s.pdf.setFont('helvetica', 'normal')
-        for (const row of token.rows) {
-          pdfEnsure(s, h)
-          for (let c = 0; c < Math.min(row.length, cols); c++) {
-            s.pdf.text(pdfClean(row[c].text).substring(0, 30), PDF_M.left + c * colWidth + 2, s.y)
-          }
-          s.y += h
-        }
-        s.y += 3
-        break
-      }
-
-      default: {
-        if ('text' in token && typeof token.text === 'string') {
-          const h = pdfLh(PDF_BODY)
-          pdfEnsure(s, h)
-          s.pdf.setFont('helvetica', 'normal')
-          s.pdf.setFontSize(PDF_BODY)
-          const wrapped: string[] = s.pdf.splitTextToSize(pdfClean(token.text), s.contentWidth)
-          for (const line of wrapped) {
-            pdfEnsure(s, h)
-            s.pdf.text(line, PDF_M.left, s.y)
-            s.y += h
-          }
-          s.y += 2
-        }
-      }
-    }
-  }
-}
-
 async function generatePdf(content: string): Promise<Uint8Array> {
-  const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
-  const pw = pdf.internal.pageSize.getWidth()
-  const ph = pdf.internal.pageSize.getHeight()
+  const html = marked(content)
+  const fullHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
 
-  const state: PdfLayout = {
-    pdf,
-    y: PDF_M.top,
-    maxY: ph - PDF_M.bottom,
-    contentWidth: pw - PDF_M.left - PDF_M.right,
+      <style>
+        body { 
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+          line-height: 1.6; 
+          margin: 0;
+          padding: 40px;
+          color: #333;
+          background: white;
+          max-width: 800px;
+          margin: 0 auto;
+        }
+        h1, h2, h3, h4, h5, h6 { 
+          color: #2c3e50; 
+          margin-top: 30px;
+          margin-bottom: 15px;
+          font-weight: 600;
+        }
+        h1 { 
+          font-size: 28px; 
+          border-bottom: 2px solid #3498db;
+          padding-bottom: 10px;
+        }
+        h2 { 
+          font-size: 24px; 
+          border-bottom: 1px solid #bdc3c7;
+          padding-bottom: 8px;
+        }
+        h3 { 
+          font-size: 20px; 
+          color: #34495e;
+        }
+        p { 
+          margin-bottom: 16px; 
+          text-align: justify;
+        }
+        strong { 
+          font-weight: 600; 
+          color: #2c3e50;
+        }
+        em { 
+          font-style: italic; 
+          color: #7f8c8d;
+        }
+        code { 
+          background-color: #f8f9fa; 
+          padding: 3px 6px; 
+          border-radius: 4px; 
+          font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+          font-size: 14px;
+          border: 1px solid #e9ecef;
+        }
+        pre { 
+          background-color: #f8f9fa; 
+          padding: 16px; 
+          border-radius: 6px; 
+          overflow-x: auto; 
+          font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+          border: 1px solid #e9ecef;
+          margin: 20px 0;
+        }
+        blockquote { 
+          border-left: 4px solid #3498db; 
+          padding-left: 20px; 
+          margin: 20px 0; 
+          font-style: italic;
+          background-color: #f8f9fa;
+          padding: 15px;
+          border-radius: 0 6px 6px 0;
+        }
+        ul, ol { 
+          padding-left: 25px; 
+          margin: 16px 0;
+        }
+        li { 
+          margin-bottom: 8px;
+        }
+        hr { 
+          border: none;
+          border-top: 2px solid #bdc3c7;
+          margin: 30px 0;
+        }
+        a { 
+          color: #3498db;
+          text-decoration: none;
+        }
+        a:hover { 
+          text-decoration: underline;
+        }
+
+      </style>
+    </head>
+    <body>
+      ${html}
+    </body>
+    </html>
+  `
+
+  const tempDiv = document.createElement('div')
+  tempDiv.innerHTML = fullHtml
+  const s = tempDiv.style
+  s.position = 'absolute'
+  s.left = '-9999px'
+  s.top = '-9999px'
+  s.width = '800px'
+  s.background = 'white'
+  s.boxShadow = '0 0 10px rgba(0,0,0,0.1)'
+  document.body.appendChild(tempDiv)
+
+  try {
+    const canvas = await html2canvas(tempDiv, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      width: 800,
+      height: tempDiv.scrollHeight
+    })
+
+    const imgData = canvas.toDataURL('image/png')
+    const pdf = new jsPDF('p', 'mm', 'a4')
+
+    const imgWidth = 160
+    const pageHeight = 297
+    const topMargin = 25
+    const bottomMargin = 30
+    const usablePageHeight = pageHeight - topMargin - bottomMargin
+
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    let heightLeft = imgHeight
+
+    if (imgHeight <= usablePageHeight) {
+      const availableHeight = pageHeight - topMargin - bottomMargin
+      const verticalOffset = (availableHeight - imgHeight) / 2 + topMargin
+      pdf.addImage(imgData, 'PNG', 25, verticalOffset, imgWidth, imgHeight)
+    } else {
+      const totalPages = Math.ceil(imgHeight / usablePageHeight)
+
+      const firstPageHeight = Math.min(usablePageHeight, imgHeight)
+
+      const firstPageCanvas = document.createElement('canvas')
+      const firstCtx = firstPageCanvas.getContext('2d')
+      firstPageCanvas.width = canvas.width
+      firstPageCanvas.height = firstPageHeight * (canvas.width / imgWidth)
+
+      firstCtx?.drawImage(
+        canvas,
+        0, 0,
+        canvas.width, firstPageHeight * (canvas.width / imgWidth),
+        0, 0,
+        firstPageCanvas.width, firstPageCanvas.height
+      )
+
+      const firstPageImgData = firstPageCanvas.toDataURL('image/png')
+      pdf.addImage(firstPageImgData, 'PNG', 25, topMargin, imgWidth, firstPageHeight)
+
+      if (totalPages > 1) {
+        for (let pageNum = 1; pageNum < totalPages; pageNum++) {
+          const pageStartY = pageNum * usablePageHeight
+          const pageHeight = Math.min(usablePageHeight, imgHeight - pageStartY)
+
+          const pageCanvas = document.createElement('canvas')
+          const pageCtx = pageCanvas.getContext('2d')
+          pageCanvas.width = canvas.width
+          pageCanvas.height = pageHeight * (canvas.width / imgWidth)
+
+          pageCtx?.drawImage(
+            canvas,
+            0, pageStartY * (canvas.width / imgWidth),
+            canvas.width, pageHeight * (canvas.width / imgWidth),
+            0, 0,
+            pageCanvas.width, pageCanvas.height
+          )
+
+          const pageImgData = pageCanvas.toDataURL('image/png')
+
+          pdf.addPage()
+          pdf.addImage(pageImgData, 'PNG', 25, topMargin, imgWidth, pageHeight)
+        }
+      }
+    }
+
+    const pdfArrayBuffer = pdf.output('arraybuffer')
+    return new Uint8Array(pdfArrayBuffer)
+  } finally {
+    document.body.removeChild(tempDiv)
   }
-
-  const tokens = marked.lexer(pdfPreClean(content))
-  pdfRenderBlocks(state, tokens)
-
-  return new Uint8Array(pdf.output('arraybuffer'))
 }
 
 async function generateDocx(content: string): Promise<Uint8Array> {
@@ -554,13 +404,9 @@ async function generateDocx(content: string): Promise<Uint8Array> {
     }]
   })
 
-  if (typeof globalThis.Blob !== 'undefined') {
-    const blob = await Packer.toBlob(doc)
-    const arrayBuffer = await blob.arrayBuffer()
-    return new Uint8Array(arrayBuffer)
-  }
-  const buffer = await Packer.toBuffer(doc)
-  return new Uint8Array(buffer)
+  const blob = await Packer.toBlob(doc)
+  const arrayBuffer = await blob.arrayBuffer()
+  return new Uint8Array(arrayBuffer)
 }
 
 function parseMarkdownText(text: string): TextRun[] {

@@ -25,21 +25,16 @@ async function assertTeam(teamId: string): Promise<void> {
 
 export async function handleRun(req: Request, res: Response): Promise<void> {
   try {
-    const { team_id, project_id, schema_id, phone_id, mode, last_n, date_from, date_to } = req.body || {}
+    const { team_id, schema_id, mode, last_n, date_from, date_to } = req.body || {}
     if (!team_id) { res.status(400).json({ error: 'team_id is required' }); return }
-    if (!project_id) { res.status(400).json({ error: 'project_id is required' }); return }
 
     await assertTeam(team_id)
     const apiKeys = await getApiKeys(team_id)
-    if (!apiKeys.telerivet) { res.status(400).json({ error: 'No Telerivet API key found for this team' }); return }
 
     const results = await runExtraction({
       teamId: team_id,
-      projectId: project_id,
       apiKeys,
-      telerivetApiKey: apiKeys.telerivet,
       schemaId: schema_id,
-      phoneId: phone_id,
       mode: mode || 'new_only',
       lastN: last_n,
       dateFrom: date_from,
@@ -54,7 +49,7 @@ export async function handleRun(req: Request, res: Response): Promise<void> {
 
 export async function handleExtract(req: Request, res: Response): Promise<void> {
   try {
-    const { team_id, schema_id, schema, messages, contact, project_id, telerivet_api_key, store } = req.body || {}
+    const { team_id, schema_id, schema, messages, contact, store } = req.body || {}
     if (!team_id) { res.status(400).json({ error: 'team_id is required' }); return }
     if (!messages || !Array.isArray(messages)) { res.status(400).json({ error: 'messages array is required' }); return }
     if (!contact) { res.status(400).json({ error: 'contact is required' }); return }
@@ -70,13 +65,10 @@ export async function handleExtract(req: Request, res: Response): Promise<void> 
     }
     if (!extractionSchema) { res.status(400).json({ error: 'schema or schema_id is required' }); return }
 
-    const telerivetKey = telerivet_api_key || apiKeys.telerivet || ''
-    const svc = new ExtractionService({ apiKeys, telerivetApiKey: telerivetKey })
+    const svc = new ExtractionService({ apiKeys })
     const result = await svc.extractFromConversation(messages, contact, extractionSchema)
 
-    if (store && project_id) {
-      await svc.storeResults(result, extractionSchema, project_id)
-    }
+    if (store) await svc.storeResults(result, extractionSchema)
     res.json(result)
   } catch (err: any) {
     console.error('Analysis error:', err)

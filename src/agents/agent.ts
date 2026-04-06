@@ -7,7 +7,7 @@ declare global {
   type Agent = ReturnType<typeof createAgent>
   type EdgeConnections = { [index: string]: { source: string, target: string, sourceHandle: string, targetHandle: string } }
 
-  type IntegrationsTypes = "telerivet" | "app"
+  type IntegrationsTypes = "telerivet" | "app" | "simulation"
 
   interface IntegrationPayload {
     contact?: string //cross channel unique user id. If empty is created based on the integration data, usually the phone.
@@ -62,6 +62,8 @@ declare global {
     state?: AgentState
     logWriter?: (p: { worker: AIWorker, state: any }) => void
     commandExecuted?: "reset"
+    /** Resolves when the async eval + flag pipeline finishes. Set by agentfactory after execute(). */
+    evalPromise?: Promise<void>
   }
 }
 

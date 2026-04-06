@@ -29,6 +29,7 @@ import { languageDetection } from "./workers/languagedetection"
 import { hitl } from "./workers/hitl"
 import { vision } from "./workers/vision"
 import { externalApiConnector } from "./workers/externalApiConnector"
+import { extraction } from "./workers/extraction"
 
 
 type WorkerCategories = "io" | "generator" | "debug" | "tool"
@@ -88,5 +89,6 @@ export const workerRegistry = {
   hitl,
   vision,
   externalApiConnector,
+  extraction,
 
 } satisfies { [index: string]: WorkerRegistryItem }

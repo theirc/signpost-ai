@@ -1001,8 +1001,12 @@ export type Database = {
           escalation_reasoning: string | null
           escalation_to_level: number | null
           extractions: Json
+          highrisk: number | null
+          lowconf: number | null
+          askhuman: number | null
           id: string
           message: string | null
+          custom_message_flags: Json | null
           narrative_update: string | null
           rating: string | null
           rating_example: string | null
@@ -1025,8 +1029,12 @@ export type Database = {
           escalation_reasoning?: string | null
           escalation_to_level?: number | null
           extractions?: Json
+          highrisk?: number | null
+          lowconf?: number | null
+          askhuman?: number | null
           id?: string
           message?: string | null
+          custom_message_flags?: Json | null
           narrative_update?: string | null
           rating?: string | null
           rating_example?: string | null
@@ -1049,8 +1057,12 @@ export type Database = {
           escalation_reasoning?: string | null
           escalation_to_level?: number | null
           extractions?: Json
+          highrisk?: number | null
+          lowconf?: number | null
+          askhuman?: number | null
           id?: string
           message?: string | null
+          custom_message_flags?: Json | null
           narrative_update?: string | null
           rating?: string | null
           rating_example?: string | null

@@ -53,8 +53,6 @@ export interface ExtractionMethod {
 }
 
 export interface AnalysisFilters {
-  project_id?: string
-  phone_id?: string
   date_range?: {
     start: number
     end: number
@@ -96,7 +94,7 @@ export interface SchemaTemplate {
 }
 
 /**
- * Minimal Telerivet message/contact shapes needed by the extraction engine.
+ * Minimal Supabase-backed message/contact shapes needed by the extraction engine.
  * Kept intentionally lean — consumers can extend these.
  */
 export interface ConversationMessage {

@@ -142,10 +142,11 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
 
   if (!response && !audio) return "No output found"
 
-  const media_urls: string[] = []
+  const media_urls: string[] = p.output.files || []
+  const quickReplies: string[] = p.output.quickreplies || []
 
   // Extract all image URLs from response (both markdown and plain URLs)
-  if (response) {
+  if (response && media_urls.length == 0) {
     const allowedExt = /\.(jpg|jpeg|png|pdf|doc|docx|ogg|mp4)(\?[^\)\s]*)?$/i
 
     // First, extract markdown file URLs: ![alt](url) or [text](url)
@@ -166,8 +167,8 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
     response = response.replace(/(?<!\]\()https?:\/\/[^\s<>]+/gi, (url) => allowedExt.test(url) ? '' : url).trim()
   }
 
-  const quickReplies: string[] = []
-  if (response) {
+
+  if (response && quickReplies.length == 0) {
     const bracketedRegex = /\[([^\]]+)\]/g
     let match
     while ((match = bracketedRegex.exec(response)) !== null) {
