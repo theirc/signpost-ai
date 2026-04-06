@@ -156,18 +156,21 @@ Agent: ${agentResponse}
 
 Evaluate this interaction based on the catalog and contact profile above.`
 
-  console.log("riskItems:", riskItems.length)
-  console.log("descalationItems:", descalationItems.length)
-  console.log("agentItems:", agentItems.length)
-
-  const { object } = await generateObject({
-    model: openai("gpt-5.4-nano"),
-    schema: EvaluationSchema,
-    schemaName: "ConversationEvaluation",
-    schemaDescription: "Evaluation of a single interaction in a humanitarian support conversation",
-    system,
-    prompt,
-  })
+  let object: any
+  try {
+    const result = await generateObject({
+      model: openai("gpt-5.4-nano"),
+      schema: EvaluationSchema,
+      schemaName: "ConversationEvaluation",
+      schemaDescription: "Evaluation of a single interaction in a humanitarian support conversation",
+      system,
+      prompt,
+    })
+    object = result.object
+  } catch (err) {
+    console.error('[Evals] generateObject failed:', err)
+    throw err
+  }
 
   return object
 

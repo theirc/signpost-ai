@@ -1,17 +1,16 @@
 /**
  * Isomorphic Extraction Engine
  *
- * Runs identically on browser (via decorsify CORS proxy, same as integrations)
- * and server/cron (direct HTTPS to api.telerivet.com).
+ * Runs identically on browser and server/cron.
+ * Reads conversations and persists extraction payloads in Supabase.
  *
  * Lives in src/lib/agents/analysis — no Next.js or DOM imports here.
  */
 
-import axios from 'axios'
 import { generateObject } from 'ai'
 import { z } from 'zod'
 import { createModel } from '../utils'
-import { isBrowser } from '../isbrowser'
+import { supabase } from '../db'
 import type {
   ExtractionSchema,
   ExtractionField,
@@ -24,8 +23,6 @@ import type {
 export interface ExtractionServiceOptions {
   /** Resolved API keys (openai, anthropic, etc.) */
   apiKeys: APIKeys
-  /** Telerivet REST API key — used when storing results */
-  telerivetApiKey: string
 }
 
 export class ExtractionService {
@@ -86,46 +83,89 @@ export class ExtractionService {
   }
 
   /**
-   * Persist extraction results to Telerivet (contact or message vars).
-   * Isomorphic: browser uses decorsify (same as integrations/telerivet), server calls API directly.
+   * Persist extraction results to Supabase (contact/message extraction payloads).
    */
   async storeResults(
     result: ExtractionResult,
     schema: ExtractionSchema,
-    projectId: string,
     latestMessageId?: string
   ): Promise<void> {
-    const { telerivetApiKey } = this.options
+    const payload = this.buildExtractionPayload(result, schema)
 
-    let url: string
     if (schema.storage_target === 'contact') {
-      url = `https://api.telerivet.com/v1/projects/${projectId}/contacts/${result.contact_id}`
-    } else {
-      const messageId = latestMessageId || result.conversation_id
-      url = `https://api.telerivet.com/v1/projects/${projectId}/messages/${messageId}`
+      const targetId = result.contact_id
+      const { data: contactRow, error: contactErr } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('id', targetId)
+        .single()
+      if (contactErr || !contactRow) throw new Error(`Contact not found: ${targetId}`)
+
+      const existingExtractions = (contactRow as any).extractions && typeof (contactRow as any).extractions === 'object'
+        ? (contactRow as any).extractions
+        : {}
+      const nextExtractions = {
+        ...existingExtractions,
+        [schema.id]: payload,
+      }
+
+      const { error: updateErr } = await supabase
+        .from('contacts')
+        .update({ extractions: nextExtractions } as any)
+        .eq('id', targetId)
+
+      if (!updateErr) return
+
+      // Fallback before migration exists: store in contacts.data JSON.
+      const dataObj = this.parseJsonObject((contactRow as any).data)
+      dataObj.analysis_extractions ||= {}
+      dataObj.analysis_extractions[schema.id] = payload
+      const { error: fallbackErr } = await supabase
+        .from('contacts')
+        .update({ data: JSON.stringify(dataObj) })
+        .eq('id', targetId)
+      if (fallbackErr) throw fallbackErr
+      return
     }
 
-    let decors = ''
-    if (isBrowser) decors = 'https://signpost-ia-app-qa.azurewebsites.net/decorsify/'
-    const requestUrl = `${decors}${url}`
+    const messageId = latestMessageId || result.conversation_id
+    const { data: messageRow, error: msgErr } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('id', messageId)
+      .single()
+    if (msgErr || !messageRow) throw new Error(`Message not found: ${messageId}`)
 
-    const varsToStore = this.buildVarsPayload(result, schema)
-    const auth = isBrowser
-      ? btoa(`${telerivetApiKey}:`)
-      : Buffer.from(`${telerivetApiKey}:`).toString('base64')
-
-    const { status, data } = await axios.post(requestUrl, { vars: varsToStore }, {
-      headers: {
-        Authorization: `Basic ${auth}`,
-        'Content-Type': 'application/json',
-      },
-      validateStatus: (s) => s >= 200 && s < 600,
-    })
-
-    if (status >= 400) {
-      const msg = data?.error?.message ?? JSON.stringify(data)
-      throw new Error(`Telerivet API error ${status}: ${msg}`)
+    const existingMsgExtractions = (messageRow as any).extractions && typeof (messageRow as any).extractions === 'object'
+      ? (messageRow as any).extractions
+      : {}
+    const nextMsgExtractions = {
+      ...existingMsgExtractions,
+      [schema.id]: payload,
     }
+
+    const { error: msgUpdateErr } = await supabase
+      .from('messages')
+      .update({ extractions: nextMsgExtractions } as any)
+      .eq('id', messageId)
+    if (!msgUpdateErr) return
+
+    // Fallback before migration exists: store message-target extraction under contact.data.
+    const { data: contactRow, error: contactErr } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('id', result.contact_id)
+      .single()
+    if (contactErr || !contactRow) throw msgUpdateErr
+    const dataObj = this.parseJsonObject((contactRow as any).data)
+    dataObj.analysis_message_extractions ||= {}
+    dataObj.analysis_message_extractions[messageId] ||= {}
+    dataObj.analysis_message_extractions[messageId][schema.id] = payload
+    const { error: fallbackErr } = await supabase
+      .from('contacts')
+      .update({ data: JSON.stringify(dataObj) })
+      .eq('id', result.contact_id)
+    if (fallbackErr) throw fallbackErr
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -352,28 +392,28 @@ Field description: ${field.description}`,
     }
   }
 
-  private buildVarsPayload(result: ExtractionResult, schema: ExtractionSchema): Record<string, any> {
-    const MAX_VAR_LEN = 32
-    const sanitize = (name: string) =>
-      name.toLowerCase().trim().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
-    const truncate = (name: string) => sanitize(name).slice(0, MAX_VAR_LEN)
-
-    const schemaKey = truncate(schema.name) || truncate(schema.id.split('-')[0])
-    const extractedAtKey = `${schemaKey}_ext_at`.slice(0, MAX_VAR_LEN)
-
-    const vars: Record<string, any> = {}
-    for (const [key, value] of Object.entries(result.extracted_data)) {
-      vars[truncate(key)] = value
+  private buildExtractionPayload(result: ExtractionResult, schema: ExtractionSchema): Record<string, any> {
+    return {
+      schema_id: schema.id,
+      schema_name: schema.name,
+      extracted_at: result.extracted_at,
+      extracted_data: result.extracted_data,
+      confidence: result.confidence || {},
     }
-    vars[extractedAtKey] = result.extracted_at
+  }
 
-    if (result.confidence) {
-      for (const [key, conf] of Object.entries(result.confidence)) {
-        vars[`${sanitize(key)}_conf`.slice(0, MAX_VAR_LEN)] = conf
+  private parseJsonObject(raw: unknown): Record<string, any> {
+    if (!raw) return {}
+    if (typeof raw === "object") return raw as Record<string, any>
+    if (typeof raw === "string") {
+      try {
+        const parsed = JSON.parse(raw)
+        return parsed && typeof parsed === "object" ? parsed : {}
+      } catch {
+        return {}
       }
     }
-
-    return vars
+    return {}
   }
 
 }
