@@ -27,11 +27,12 @@ export async function getOrCreateContact(integration: IntegrationPayload, passwo
     const contactKey = integration.contact || integration.phone
     if (!contactKey) return null
 
-    const { data: existingContact } = await supabase.from("contacts").select().eq("id", contactKey).single()
-    if (existingContact) return existingContact as any
-
     const { digits, countryCode } = parsePhone(integration.phone)
     const id = await codec.encrypt(digits || integration.phone, password)
+
+    const { data: existingContact } = await supabase.from("contacts").select().eq("id", id).single()
+    if (existingContact) return existingContact as any
+
     const data = await codec.encrypt(JSON.stringify({
       name: integration.name,
       phone: integration.phone,

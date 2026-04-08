@@ -4,27 +4,25 @@ declare global {
 }
 
 const openAiModels = [
+  'gpt-5.4',
+  'gpt-5.4-pro',
+  'gpt-5.4-mini',
+  'gpt-5.4-nano',
   'gpt-5',
+  'gpt-5-pro',
   'gpt-5-mini',
   'gpt-5-nano',
   'gpt-4.1',
   'gpt-4.1-mini',
   'gpt-4.1-nano',
-  'o1-preview',
-  'o1-mini',
-  'o1-pro',
   'o4-mini',
+  'o3-pro',
   'o3',
   'o3-mini',
-  'o3-pro',
+  'o1-pro',
   'o1',
-  'gpt-4o',
-  'chatgpt-4o-latest',
-  'gpt-4o-mini',
-  'gpt-4-turbo',
-  'gpt-4',
-  'gpt-3.5-turbo',
-  'o4-mini-deep-research',
+  'o1-preview',
+  'o1-mini',
 ]
 
 const anthropicModels = [
