@@ -12,14 +12,11 @@ declare global {
 
 export type { DocumentGeneratorWorker }
 
-// @ts-ignore -- pdfmake ships as CJS; default import matches the runtime instance
-import pdfMake from 'pdfmake/build/pdfmake'
-// @ts-ignore
-import pdfFonts from 'pdfmake/build/vfs_fonts'
-import { marked, type Token } from 'marked'
+import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
+import { marked } from 'marked'
 
-try { (pdfMake as any).vfs = (pdfFonts as any)?.pdfMake?.vfs ?? pdfFonts } catch {}
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, convertInchesToTwip } from 'docx'
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, convertInchesToTwip } from 'docx'
 
 function extractTitle(content: string): string {
   if (!content) return 'generated'
@@ -104,263 +101,201 @@ function generateCsv(content: string): Uint8Array {
   return new TextEncoder().encode(csvContent)
 }
 
-const HEADING_SIZES = [24, 20, 16, 14, 12, 10]
-const CONTENT_WIDTH = 515
-
-function cleanMarkdown(md: string): string {
-  let r = md
-  r = r.replace(/<!--[\s\S]*?-->/g, '')
-  r = r.replace(/<br\s*\/?>/gi, '\n')
-  r = r.replace(/<[^>]+>/g, '')
-  r = r.replace(/&amp;/g, '&')
-  r = r.replace(/&lt;/g, '<')
-  r = r.replace(/&gt;/g, '>')
-  r = r.replace(/&quot;/g, '"')
-  r = r.replace(/&#39;|&apos;/g, "'")
-  r = r.replace(/&amp;/g, '&')
-  r = r.replace(/&emsp;/g, '    ')
-  r = r.replace(/&ensp;/g, '  ')
-  r = r.replace(/&nbsp;/g, ' ')
-  r = r.replace(/&thinsp;/g, ' ')
-  r = r.replace(/&mdash;/g, '\u2014')
-  r = r.replace(/&ndash;/g, '\u2013')
-  r = r.replace(/&hellip;/g, '\u2026')
-  r = r.replace(/&bull;/g, '\u2022')
-  r = r.replace(/&rarr;/g, '\u2192')
-  r = r.replace(/&larr;/g, '\u2190')
-  r = r.replace(/&copy;/g, '\u00A9')
-  r = r.replace(/&reg;/g, '\u00AE')
-  r = r.replace(/&trade;/g, '\u2122')
-  r = r.replace(/&deg;/g, '\u00B0')
-  r = r.replace(/&[a-zA-Z]+;/g, ' ')
-  r = r.replace(/&#(\d+);/g, (_, c) => String.fromCharCode(Number(c)))
-  r = r.replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
-  r = r.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/gu, '')
-  return r
-}
-
-function flattenInline(tokens: Token[]): any[] {
-  const result: any[] = []
-  for (const t of tokens) {
-    switch (t.type) {
-      case 'text':
-        if (t.tokens && t.tokens.length > 0) {
-          result.push(...flattenInline(t.tokens))
-        } else {
-          result.push({ text: t.text })
-        }
-        break
-      case 'strong':
-        result.push(...flattenInline(t.tokens).map((s: any) => ({ ...s, bold: true })))
-        break
-      case 'em':
-        result.push(...flattenInline(t.tokens).map((s: any) => ({ ...s, italics: true })))
-        break
-      case 'codespan':
-        result.push({ text: t.text, fontSize: 9, background: '#f0f0f0', noWrap: true })
-        break
-      case 'link':
-        result.push(...flattenInline(t.tokens).map((s: any) => ({
-          ...s, link: t.href, color: '#2980b9', decoration: 'underline',
-        })))
-        break
-      case 'br':
-        result.push({ text: '\n' })
-        break
-      default:
-        if ('tokens' in t && Array.isArray(t.tokens)) {
-          result.push(...flattenInline(t.tokens as Token[]))
-        } else if ('text' in t && typeof t.text === 'string') {
-          result.push({ text: t.text })
-        }
-    }
-  }
-  return result
-}
-
-function tokensToPdfContent(tokens: Token[]): any[] {
-  const content: any[] = []
-  for (const token of tokens) {
-    switch (token.type) {
-      case 'heading': {
-        const fs = HEADING_SIZES[token.depth - 1] ?? 10
-        content.push({
-          text: flattenInline(token.tokens),
-          fontSize: fs,
-          bold: true,
-          margin: [0, token.depth <= 2 ? 12 : 8, 0, 4] as [number, number, number, number],
-        })
-        if (token.depth <= 2) {
-          content.push({
-            canvas: [{
-              type: 'line' as const,
-              x1: 0, y1: 0,
-              x2: CONTENT_WIDTH, y2: 0,
-              lineWidth: token.depth === 1 ? 1 : 0.5,
-              lineColor: '#bdc3c7',
-            }],
-            margin: [0, 0, 0, 6] as [number, number, number, number],
-          })
-        }
-        break
-      }
-
-      case 'paragraph':
-        content.push({
-          text: flattenInline(token.tokens),
-          margin: [0, 0, 0, 6] as [number, number, number, number],
-          lineHeight: 1.4,
-        })
-        break
-
-      case 'list': {
-        const items = token.items.map((item: any) => {
-          const parts: any[] = []
-          for (const sub of item.tokens) {
-            if ('tokens' in sub && Array.isArray(sub.tokens)) {
-              parts.push(...flattenInline(sub.tokens as Token[]))
-            } else if ('text' in sub && typeof sub.text === 'string') {
-              parts.push({ text: sub.text })
-            }
-          }
-          return { text: parts.length > 0 ? parts : [{ text: '' }] }
-        })
-        if (token.ordered) {
-          const start = typeof token.start === 'number' ? token.start : 1
-          content.push({ ol: items, start, margin: [0, 0, 0, 6] as [number, number, number, number] })
-        } else {
-          content.push({ ul: items, margin: [0, 0, 0, 6] as [number, number, number, number] })
-        }
-        break
-      }
-
-      case 'code':
-        content.push({
-          table: {
-            widths: ['*'],
-            body: [[{
-              text: token.text,
-              fontSize: 9,
-              color: '#333333',
-              preserveLeadingSpaces: true,
-            }]],
-          },
-          layout: {
-            hLineWidth: () => 0.5,
-            vLineWidth: () => 0.5,
-            hLineColor: () => '#e9ecef',
-            vLineColor: () => '#e9ecef',
-            fillColor: () => '#f8f9fa',
-            paddingLeft: () => 6,
-            paddingRight: () => 6,
-            paddingTop: () => 4,
-            paddingBottom: () => 4,
-          },
-          margin: [0, 4, 0, 6] as [number, number, number, number],
-        })
-        break
-
-      case 'blockquote': {
-        const quoteStack: any[] = []
-        for (const sub of token.tokens) {
-          if (sub.type === 'paragraph' && sub.tokens) {
-            quoteStack.push({
-              text: flattenInline(sub.tokens),
-              italics: true,
-              color: '#555555',
-              margin: [0, 0, 0, 4] as [number, number, number, number],
-            })
-          }
-        }
-        content.push({
-          table: {
-            widths: ['*'],
-            body: [[{ stack: quoteStack }]],
-          },
-          layout: {
-            hLineWidth: () => 0,
-            vLineWidth: (i: number) => i === 0 ? 2 : 0,
-            vLineColor: () => '#3498db',
-            paddingLeft: () => 8,
-            paddingRight: () => 4,
-            paddingTop: () => 4,
-            paddingBottom: () => 4,
-          },
-          margin: [0, 4, 0, 6] as [number, number, number, number],
-        })
-        break
-      }
-
-      case 'table': {
-        if (token.header.length === 0) break
-        const headerRow = token.header.map((h: any) => ({
-          text: flattenInline(h.tokens || []),
-          bold: true,
-          fillColor: '#f0f0f0',
-        }))
-        const bodyRows = token.rows.map((row: any) =>
-          row.map((cell: any) => ({
-            text: flattenInline(cell.tokens || []),
-          }))
-        )
-        content.push({
-          table: {
-            headerRows: 1,
-            widths: Array(token.header.length).fill('*'),
-            body: [headerRow, ...bodyRows],
-          },
-          layout: 'lightHorizontalLines',
-          margin: [0, 4, 0, 6] as [number, number, number, number],
-        })
-        break
-      }
-
-      case 'hr':
-        content.push({
-          canvas: [{
-            type: 'line' as const,
-            x1: 0, y1: 0,
-            x2: CONTENT_WIDTH, y2: 0,
-            lineWidth: 0.5,
-            lineColor: '#bdc3c7',
-          }],
-          margin: [0, 8, 0, 8] as [number, number, number, number],
-        })
-        break
-
-      case 'html':
-      case 'space':
-        break
-
-      default:
-        if ('text' in token && typeof token.text === 'string') {
-          content.push({
-            text: token.text,
-            margin: [0, 0, 0, 4] as [number, number, number, number],
-          })
-        }
-    }
-  }
-  return content
-}
-
 async function generatePdf(content: string): Promise<Uint8Array> {
-  const cleaned = cleanMarkdown(content)
-  const tokens = marked.lexer(cleaned)
-  const pdfContent = tokensToPdfContent(tokens)
+  const html = marked(content)
+  const fullHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
 
-  const docDefinition: any = {
-    content: pdfContent,
-    defaultStyle: {
-      font: 'Roboto',
-      fontSize: 10,
-      lineHeight: 1.3,
-    },
-    pageMargins: [40, 40, 40, 40],
+      <style>
+        body { 
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+          line-height: 1.6; 
+          margin: 0;
+          padding: 40px;
+          color: #333;
+          background: white;
+          max-width: 800px;
+          margin: 0 auto;
+        }
+        h1, h2, h3, h4, h5, h6 { 
+          color: #2c3e50; 
+          margin-top: 30px;
+          margin-bottom: 15px;
+          font-weight: 600;
+        }
+        h1 { 
+          font-size: 28px; 
+          border-bottom: 2px solid #3498db;
+          padding-bottom: 10px;
+        }
+        h2 { 
+          font-size: 24px; 
+          border-bottom: 1px solid #bdc3c7;
+          padding-bottom: 8px;
+        }
+        h3 { 
+          font-size: 20px; 
+          color: #34495e;
+        }
+        p { 
+          margin-bottom: 16px; 
+          text-align: justify;
+        }
+        strong { 
+          font-weight: 600; 
+          color: #2c3e50;
+        }
+        em { 
+          font-style: italic; 
+          color: #7f8c8d;
+        }
+        code { 
+          background-color: #f8f9fa; 
+          padding: 3px 6px; 
+          border-radius: 4px; 
+          font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+          font-size: 14px;
+          border: 1px solid #e9ecef;
+        }
+        pre { 
+          background-color: #f8f9fa; 
+          padding: 16px; 
+          border-radius: 6px; 
+          overflow-x: auto; 
+          font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+          border: 1px solid #e9ecef;
+          margin: 20px 0;
+        }
+        blockquote { 
+          border-left: 4px solid #3498db; 
+          padding-left: 20px; 
+          margin: 20px 0; 
+          font-style: italic;
+          background-color: #f8f9fa;
+          padding: 15px;
+          border-radius: 0 6px 6px 0;
+        }
+        ul, ol { 
+          padding-left: 25px; 
+          margin: 16px 0;
+        }
+        li { 
+          margin-bottom: 8px;
+        }
+        hr { 
+          border: none;
+          border-top: 2px solid #bdc3c7;
+          margin: 30px 0;
+        }
+        a { 
+          color: #3498db;
+          text-decoration: none;
+        }
+        a:hover { 
+          text-decoration: underline;
+        }
+
+      </style>
+    </head>
+    <body>
+      ${html}
+    </body>
+    </html>
+  `
+
+  const tempDiv = document.createElement('div')
+  tempDiv.innerHTML = fullHtml
+  const s = tempDiv.style
+  s.position = 'absolute'
+  s.left = '-9999px'
+  s.top = '-9999px'
+  s.width = '800px'
+  s.background = 'white'
+  s.boxShadow = '0 0 10px rgba(0,0,0,0.1)'
+  document.body.appendChild(tempDiv)
+
+  try {
+    const canvas = await html2canvas(tempDiv, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      width: 800,
+      height: tempDiv.scrollHeight
+    })
+
+    const imgData = canvas.toDataURL('image/png')
+    const pdf = new jsPDF('p', 'mm', 'a4')
+
+    const imgWidth = 160
+    const pageHeight = 297
+    const topMargin = 25
+    const bottomMargin = 30
+    const usablePageHeight = pageHeight - topMargin - bottomMargin
+
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    let heightLeft = imgHeight
+
+    if (imgHeight <= usablePageHeight) {
+      const availableHeight = pageHeight - topMargin - bottomMargin
+      const verticalOffset = (availableHeight - imgHeight) / 2 + topMargin
+      pdf.addImage(imgData, 'PNG', 25, verticalOffset, imgWidth, imgHeight)
+    } else {
+      const totalPages = Math.ceil(imgHeight / usablePageHeight)
+
+      const firstPageHeight = Math.min(usablePageHeight, imgHeight)
+
+      const firstPageCanvas = document.createElement('canvas')
+      const firstCtx = firstPageCanvas.getContext('2d')
+      firstPageCanvas.width = canvas.width
+      firstPageCanvas.height = firstPageHeight * (canvas.width / imgWidth)
+
+      firstCtx?.drawImage(
+        canvas,
+        0, 0,
+        canvas.width, firstPageHeight * (canvas.width / imgWidth),
+        0, 0,
+        firstPageCanvas.width, firstPageCanvas.height
+      )
+
+      const firstPageImgData = firstPageCanvas.toDataURL('image/png')
+      pdf.addImage(firstPageImgData, 'PNG', 25, topMargin, imgWidth, firstPageHeight)
+
+      if (totalPages > 1) {
+        for (let pageNum = 1; pageNum < totalPages; pageNum++) {
+          const pageStartY = pageNum * usablePageHeight
+          const pageHeight = Math.min(usablePageHeight, imgHeight - pageStartY)
+
+          const pageCanvas = document.createElement('canvas')
+          const pageCtx = pageCanvas.getContext('2d')
+          pageCanvas.width = canvas.width
+          pageCanvas.height = pageHeight * (canvas.width / imgWidth)
+
+          pageCtx?.drawImage(
+            canvas,
+            0, pageStartY * (canvas.width / imgWidth),
+            canvas.width, pageHeight * (canvas.width / imgWidth),
+            0, 0,
+            pageCanvas.width, pageCanvas.height
+          )
+
+          const pageImgData = pageCanvas.toDataURL('image/png')
+
+          pdf.addPage()
+          pdf.addImage(pageImgData, 'PNG', 25, topMargin, imgWidth, pageHeight)
+        }
+      }
+    }
+
+    const pdfArrayBuffer = pdf.output('arraybuffer')
+    return new Uint8Array(pdfArrayBuffer)
+  } finally {
+    document.body.removeChild(tempDiv)
   }
-
-  const buffer = await pdfMake.createPdf(docDefinition).getBuffer()
-  return new Uint8Array(buffer)
 }
 
 async function generateDocx(content: string): Promise<Uint8Array> {
@@ -469,13 +404,9 @@ async function generateDocx(content: string): Promise<Uint8Array> {
     }]
   })
 
-  if (typeof globalThis.Blob !== 'undefined') {
-    const blob = await Packer.toBlob(doc)
-    const arrayBuffer = await blob.arrayBuffer()
-    return new Uint8Array(arrayBuffer)
-  }
-  const buffer = await Packer.toBuffer(doc)
-  return new Uint8Array(buffer)
+  const blob = await Packer.toBlob(doc)
+  const arrayBuffer = await blob.arrayBuffer()
+  return new Uint8Array(arrayBuffer)
 }
 
 function parseMarkdownText(text: string): TextRun[] {
