@@ -28,7 +28,7 @@ export async function getOrCreateContact(integration: IntegrationPayload, passwo
     if (!contactKey) return null
 
     const { digits, countryCode } = parsePhone(integration.phone)
-    const id = await codec.encrypt(digits || integration.phone, password)
+    const id = integration.contact ? integration.contact : await codec.encrypt(digits || integration.phone, password)
 
     const { data: existingContact } = await supabase.from("contacts").select().eq("id", id).single()
     if (existingContact) return existingContact as any
