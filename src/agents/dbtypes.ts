@@ -66,6 +66,7 @@ declare global {
     lasteval?: string
     no_reply_needed?: boolean
     internal_comments?: MessageComment[]
+    hitl?: boolean
 
     evaluation?: {
       [index: string]: EvaluationContactPayload

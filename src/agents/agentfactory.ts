@@ -272,7 +272,6 @@ export function createAgent(config: AgentConfig) {
       p.team = config.team_id || ""
       p.logWriter ||= () => { }
       p.agent = agent
-      // p.integration ||= {}
 
       if (p.debug && agent.debuguuid && !p.uid) p.uid = agent.debuguuid
 
@@ -346,15 +345,21 @@ export function createAgent(config: AgentConfig) {
 
       // ───── HITL ───────────────────────────────────────────────────────
 
-      if (hasUid && p.state?.agent?.hitl?.active && p.integration) {
-        await agent.sendUserHITLMessage({
-          causes: p.state.agent?.hitl.causes || [],
-          integration: p.integration
-        })
+      if (p.integration && contact && contact.hitl) {
         agent.currentWorker = null
         agent.update()
         return
       }
+
+      // if (hasUid && p.state?.agent?.hitl?.active && p.integration) {
+      //   await agent.sendUserHITLMessage({
+      //     causes: p.state.agent?.hitl.causes || [],
+      //     integration: p.integration
+      //   })
+      //   agent.currentWorker = null
+      //   agent.update()
+      //   return
+      // }
 
       // ───── Execution ───────────────────────────────────────────────────────
 
@@ -444,7 +449,7 @@ export function createAgent(config: AgentConfig) {
             await Promise.all(enabledFlags.map(async (flag) => {
               try {
                 const { object } = await generateObject({
-                  model: openai("gpt-4o-mini"),
+                  model: openai("gpt-4.1-mini"),
                   schema: FlagSchema,
                   system: `You are a flag detection system for a humanitarian AI assistant. Evaluate whether the following condition is met.\n\nCondition: ${flag.detection_prompt}`,
                   prompt: `User message: ${message}\n\nAgent response: ${response}`,
@@ -499,10 +504,10 @@ export function createAgent(config: AgentConfig) {
 
       // ───── End ───────────────────────────────────────────────────────
 
-      if (hasUid && p.state?.agent?.hitl?.active && p.integration) await agent.sendUserHITLMessage({
-        causes: p.state?.agent?.hitl?.causes || [],
-        integration: p.integration
-      })
+      // if (hasUid && p.state?.agent?.hitl?.active && p.integration) await agent.sendUserHITLMessage({
+      //   causes: p.state?.agent?.hitl?.causes || [],
+      //   integration: p.integration
+      // })
 
       agent.currentWorker = null
       agent.update()
