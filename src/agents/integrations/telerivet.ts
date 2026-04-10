@@ -1,9 +1,10 @@
 import axios from "axios"
 import { isBrowser } from "../isbrowser"
+import { codec } from "./encoder"
 
 async function sendMessage(content: string, intPayload: IntegrationPayload) {
 
-  const { phone: destination, apiKey: api_key, projectId } = intPayload
+  const { phone: to_number, apiKey: api_key, projectId, route_id } = intPayload
   if (!content) return
   let decors = ""
 
@@ -13,9 +14,10 @@ async function sendMessage(content: string, intPayload: IntegrationPayload) {
 
   const payload: any = {
     content,
-    to_number: destination,
+    to_number,
     message_type: "text",
     api_key,
+    route_id,
   }
 
   const r = await axios.post(telerivetUrl, payload, { headers: { 'Content-Type': 'application/json' } })
@@ -24,7 +26,16 @@ async function sendMessage(content: string, intPayload: IntegrationPayload) {
 
 }
 
+async function sendMessageToContact(message: string, contact: Contact, codecKey: string) {
+  const enc = await codec.decrypt(contact.data, codecKey)
+  const payl = JSON.parse(enc) as IntegrationPayload
+  await sendMessage(message, payl)
+}
+
+
+
 export const telerivet = {
   sendMessage,
+  sendMessageToContact,
 }
 
