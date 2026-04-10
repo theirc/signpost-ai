@@ -19,6 +19,8 @@ declare global {
     apiKey?: string
     projectId?: string
     route_id?: string
+    contact_id?: string
+    message_id?: string //only used in the messages 
   }
 
   interface AgentState {

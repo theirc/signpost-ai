@@ -1,4 +1,4 @@
-export {}
+export { }
 
 interface MessageEvaluationItem {
   itemId?: number
@@ -113,6 +113,8 @@ declare global {
 
     agent_detected_items?: MessageEvaluationItem[]
     user_detected_items?: MessageEvaluationItem[]
+
+    integration?: IntegrationPayload
 
     /** Built-in flags: 0 none, 1 flagged, 2 resolved; null = legacy */
     highrisk?: number | null

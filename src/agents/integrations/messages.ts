@@ -16,16 +16,17 @@ function parsePhone(input: string): { digits: string | null, countryCode: string
 export async function getOrCreateContact(integration: IntegrationPayload, password: string, team: string): Promise<Contact> {
   try {
     if (!integration) return null
-    const contactKey = integration.contact || integration.phone
+    const contactKey = integration.contact || integration.phone || integration.contact_id
     if (!contactKey) return null
 
     const { digits, countryCode } = parsePhone(integration.phone)
-    const id = integration.contact ? integration.contact : await codec.encrypt(digits || integration.phone, password)
+    const id = integration.contact ? integration.contact : await codec.encrypt(digits || integration.phone || integration.contact_id, password)
 
     const data = await codec.encrypt(JSON.stringify({
       name: integration.name,
       phone: integration.phone,
-      route_id: integration.route_id
+      route_id: integration.route_id,
+      contact_id: integration.contact_id,
     } satisfies IntegrationPayload), password)
 
     const { data: existingContact } = await supabase.from("contacts").select().eq("id", id).single()
@@ -55,5 +56,9 @@ export async function getOrCreateContact(integration: IntegrationPayload, passwo
 }
 
 export async function saveMessage(message: Message): Promise<Message> {
+  if (message.integration) {
+    const { phone, name, apiKey, ...rest } = message.integration
+    message.integration = rest
+  }
   return await supabase.from("messages").insert(message as any).select().single() as Message
 }

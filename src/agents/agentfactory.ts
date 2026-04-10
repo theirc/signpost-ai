@@ -272,7 +272,7 @@ export function createAgent(config: AgentConfig) {
       p.team = config.team_id || ""
       p.logWriter ||= () => { }
       p.agent = agent
-      p.integration ||= {}
+      // p.integration ||= {}
 
       if (p.debug && agent.debuguuid && !p.uid) p.uid = agent.debuguuid
 
@@ -327,7 +327,7 @@ export function createAgent(config: AgentConfig) {
       let userMessageId: string = null
 
       try {
-        if (contact && message && p.apiKeys?.codec) {
+        if (contact && message && p.apiKeys?.codec && p.integration) {
           const userMessage = await integrations.saveMessage({
             contact: contact.id,
             role: "user",
@@ -335,6 +335,7 @@ export function createAgent(config: AgentConfig) {
             channel: p.integration.type,
             team: p.team,
             agent: agent.id,
+            integration: p.integration,
           })
           userMessageId = userMessage.id
         }
@@ -345,10 +346,10 @@ export function createAgent(config: AgentConfig) {
 
       // ───── HITL ───────────────────────────────────────────────────────
 
-      if (hasUid && p.state?.agent?.hitl?.active) {
+      if (hasUid && p.state?.agent?.hitl?.active && p.integration) {
         await agent.sendUserHITLMessage({
           causes: p.state.agent?.hitl.causes || [],
-          integration: p.integration || {}
+          integration: p.integration
         })
         agent.currentWorker = null
         agent.update()
@@ -400,6 +401,7 @@ export function createAgent(config: AgentConfig) {
             channel: p.integration.type,
             team: p.team,
             agent: agent.id,
+            integration: p.integration,
           })
           agentMessageId = agentMessage.id
         }
@@ -497,9 +499,9 @@ export function createAgent(config: AgentConfig) {
 
       // ───── End ───────────────────────────────────────────────────────
 
-      if (hasUid && p.state?.agent?.hitl?.active) await agent.sendUserHITLMessage({
+      if (hasUid && p.state?.agent?.hitl?.active && p.integration) await agent.sendUserHITLMessage({
         causes: p.state?.agent?.hitl?.causes || [],
-        integration: p.integration || {}
+        integration: p.integration
       })
 
       agent.currentWorker = null

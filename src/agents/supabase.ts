@@ -993,20 +993,21 @@ export type Database = {
           agent_concern_level: number | null
           agent_detected_items: Json | null
           agent_reasoning: string | null
+          askhuman: number | null
           channel: string | null
           contact: string | null
           created_at: string
+          custom_message_flags: Json | null
           escalation_detected: boolean | null
           escalation_from_level: number | null
           escalation_reasoning: string | null
           escalation_to_level: number | null
           extractions: Json
           highrisk: number | null
-          lowconf: number | null
-          askhuman: number | null
           id: string
+          integration: Json | null
+          lowconf: number | null
           message: string | null
-          custom_message_flags: Json | null
           narrative_update: string | null
           rating: string | null
           rating_example: string | null
@@ -1021,20 +1022,21 @@ export type Database = {
           agent_concern_level?: number | null
           agent_detected_items?: Json | null
           agent_reasoning?: string | null
+          askhuman?: number | null
           channel?: string | null
           contact?: string | null
           created_at?: string
+          custom_message_flags?: Json | null
           escalation_detected?: boolean | null
           escalation_from_level?: number | null
           escalation_reasoning?: string | null
           escalation_to_level?: number | null
           extractions?: Json
           highrisk?: number | null
-          lowconf?: number | null
-          askhuman?: number | null
           id?: string
+          integration?: Json | null
+          lowconf?: number | null
           message?: string | null
-          custom_message_flags?: Json | null
           narrative_update?: string | null
           rating?: string | null
           rating_example?: string | null
@@ -1049,20 +1051,21 @@ export type Database = {
           agent_concern_level?: number | null
           agent_detected_items?: Json | null
           agent_reasoning?: string | null
+          askhuman?: number | null
           channel?: string | null
           contact?: string | null
           created_at?: string
+          custom_message_flags?: Json | null
           escalation_detected?: boolean | null
           escalation_from_level?: number | null
           escalation_reasoning?: string | null
           escalation_to_level?: number | null
           extractions?: Json
           highrisk?: number | null
-          lowconf?: number | null
-          askhuman?: number | null
           id?: string
+          integration?: Json | null
+          lowconf?: number | null
           message?: string | null
-          custom_message_flags?: Json | null
           narrative_update?: string | null
           rating?: string | null
           rating_example?: string | null
@@ -1397,6 +1400,47 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      team_message_templates: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          sort_order: number
+          team_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          sort_order?: number
+          team_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          sort_order?: number
+          team_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_message_templates_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       teams: {
         Row: {
