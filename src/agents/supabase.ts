@@ -335,9 +335,11 @@ export type Database = {
           data: string | null
           evaluation: Json | null
           extractions: Json
+          hitl: boolean | null
           id: string
           internal_comments: Json | null
           lasteval: string | null
+          moderation_data: string | null
           name: string | null
           no_reply_needed: boolean | null
           severity: number | null
@@ -352,9 +354,11 @@ export type Database = {
           data?: string | null
           evaluation?: Json | null
           extractions?: Json
+          hitl?: boolean | null
           id: string
           internal_comments?: Json | null
           lasteval?: string | null
+          moderation_data?: string | null
           name?: string | null
           no_reply_needed?: boolean | null
           severity?: number | null
@@ -369,9 +373,11 @@ export type Database = {
           data?: string | null
           evaluation?: Json | null
           extractions?: Json
+          hitl?: boolean | null
           id?: string
           internal_comments?: Json | null
           lasteval?: string | null
+          moderation_data?: string | null
           name?: string | null
           no_reply_needed?: boolean | null
           severity?: number | null
