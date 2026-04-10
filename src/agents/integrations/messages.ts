@@ -2,15 +2,7 @@ import { supabase } from "../db"
 import { codec } from "./encoder"
 import { faker } from '@faker-js/faker'
 
-interface MessageParamters {
-  contact?: string //Contact ID if exists.
-  role?: MessageRoles
-  message?: string
-  agent?: number
-  integration?: IntegrationPayload
-  password?: string
-  team?: string
-}
+
 
 function parsePhone(input: string): { digits: string | null, countryCode: string | null } {
   if (!input) return { digits: null, countryCode: null }
@@ -30,13 +22,17 @@ export async function getOrCreateContact(integration: IntegrationPayload, passwo
     const { digits, countryCode } = parsePhone(integration.phone)
     const id = integration.contact ? integration.contact : await codec.encrypt(digits || integration.phone, password)
 
-    const { data: existingContact } = await supabase.from("contacts").select().eq("id", id).single()
-    if (existingContact) return existingContact as any
-
     const data = await codec.encrypt(JSON.stringify({
       name: integration.name,
       phone: integration.phone,
-    }), password)
+      route_id: integration.route_id
+    } satisfies IntegrationPayload), password)
+
+    const { data: existingContact } = await supabase.from("contacts").select().eq("id", id).single()
+    if (existingContact) {
+      await supabase.from("contacts").update({ team, data }).eq("id", id)
+      return existingContact as any
+    }
 
     const sex = faker.person.sexType()
 
@@ -58,66 +54,6 @@ export async function getOrCreateContact(integration: IntegrationPayload, passwo
   }
 }
 
-export async function saveMessage({ integration, password, contact, team, role, message, agent }: MessageParamters): Promise<{ contact: Contact, messageId: string }> {
-
-  if (!message) return
-  let selectedContact: Contact = null
-
-  if (!contact && role === "user" && integration.type !== "app") {
-
-    const { data: existingContact } = await supabase.from("contacts").select().eq("id", contact).single()
-
-    if (!existingContact) {
-
-      let code = null
-
-      if (integration.type === "telerivet") {
-        const { digits, countryCode } = parsePhone(integration.phone)
-        contact = await codec.encrypt(digits || integration.phone, password)
-        code = countryCode
-      }
-
-      const data = await codec.encrypt(JSON.stringify({
-        name: integration.name,
-        phone: integration.phone,
-      }), password)
-
-      const sex = faker.person.sexType()
-
-      selectedContact = await supabase.from("contacts").insert({
-        id: contact,
-        type: "user",
-        data,
-        team,
-        name: faker.person.fullName({ sex }),
-        avatar: faker.image.personPortrait({ size: 128, sex }),
-        code,
-      }).select() as any
-
-    } else {
-      selectedContact = existingContact as any
-    }
-  }
-
-  if (contact && !selectedContact) {
-    const { data: existingContact } = await supabase.from("contacts").select().eq("id", contact).single()
-    if (existingContact) {
-      selectedContact = existingContact as any
-    }
-  }
-
-  const { data } = await supabase.from("messages").insert({
-    contact,
-    role,
-    message,
-    channel: integration.type,
-    team,
-    agent,
-  } satisfies Message).select()
-
-  return {
-    contact: selectedContact,
-    messageId: data[0].id
-  }
-
+export async function saveMessage(message: Message): Promise<Message> {
+  return await supabase.from("messages").insert(message as any).select().single() as Message
 }

@@ -8,7 +8,7 @@ import { ulid } from "ulid"
 const MAX_QUICK_REPLY_LENGTH = 20
 const MAX_QUICK_REPLIES_PER_MESSAGE = 3
 
-export async function telerivetHook(r: TelerivetHookRequest, agent: number) {
+export async function telerivetHook(r: TelerivetHookRequest, agent: number, route_id: string) {
 
   let error: string
 
@@ -123,6 +123,7 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
       phone: r.from_number,
       projectId: r.project_id,
       type: "telerivet",
+      route_id: r.integration.route_id
     },
     apiKeys,
     uid,

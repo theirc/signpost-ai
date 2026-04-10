@@ -281,9 +281,6 @@ export function createAgent(config: AgentConfig) {
 
       agent.parameters = p
 
-      const integrationType = p.integration?.type as string | undefined
-      const isSimulationChannel = integrationType === "simulation" || integrationType === "app"
-
       // ───── Contact Detection ───────────────────────────────────────────────────────
 
       if (p.integration && p.apiKeys?.codec) {
@@ -325,38 +322,25 @@ export function createAgent(config: AgentConfig) {
         }
       }
 
-      // ───── User message (codec: direct insert; simulation/app: integrations.saveMessage) ─────
+      // ───── User message ─────
 
       let userMessageId: string = null
 
       try {
         if (contact && message && p.apiKeys?.codec) {
-          const { data: userMessage, error: userMsgErr } = await supabase.from("messages").insert({
+          const userMessage = await integrations.saveMessage({
             contact: contact.id,
             role: "user",
             message,
             channel: p.integration.type,
             team: p.team,
             agent: agent.id,
-          } satisfies Message).select().single()
-          if (userMsgErr) throw userMsgErr
-          userMessageId = userMessage.id
-        } else if (isSimulationChannel && p.integration && message) {
-          const { contact: detectedContact, messageId } = await integrations.saveMessage({
-            integration: p.integration,
-            password: p.apiKeys?.codec,
-            contact: p.integration.contact,
-            team: p.team,
-            role: "user",
-            message,
-            agent: agent.id
           })
-          contact = detectedContact ?? contact
-          userMessageId = messageId
-          if (detectedContact?.id) p.integration.contact = detectedContact.id
+          userMessageId = userMessage.id
         }
       } catch (error) {
         console.error('[Agent] Error saving user message:', error)
+        throw error
       }
 
       // ───── HITL ───────────────────────────────────────────────────────
@@ -409,19 +393,19 @@ export function createAgent(config: AgentConfig) {
 
       try {
         if (contactIdForMessage && response && p.integration?.type) {
-          const { data: agentMessage, error: agentMsgErr } = await supabase.from("messages").insert({
+          const agentMessage = await integrations.saveMessage({
             contact: contactIdForMessage,
             role: "assistant",
             message: response,
             channel: p.integration.type,
             team: p.team,
             agent: agent.id,
-          } satisfies Message).select().single()
-          if (agentMsgErr) throw agentMsgErr
+          })
           agentMessageId = agentMessage.id
         }
       } catch (err) {
         console.error('[Agent] Error saving agent message:', err)
+        throw err
       }
 
       if (!contact && contactIdForMessage) {

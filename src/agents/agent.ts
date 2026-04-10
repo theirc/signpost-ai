@@ -7,7 +7,7 @@ declare global {
   type Agent = ReturnType<typeof createAgent>
   type EdgeConnections = { [index: string]: { source: string, target: string, sourceHandle: string, targetHandle: string } }
 
-  type IntegrationsTypes = "telerivet" | "app" | "simulation"
+  type IntegrationsTypes = "telerivet" | "app"
 
   interface IntegrationPayload {
     contact?: string //cross channel unique user id. If empty is created based on the integration data, usually the phone.
@@ -18,6 +18,7 @@ declare global {
     //Telerivet
     apiKey?: string
     projectId?: string
+    route_id?: string
   }
 
   interface AgentState {
