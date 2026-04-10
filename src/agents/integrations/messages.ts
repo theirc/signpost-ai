@@ -60,5 +60,7 @@ export async function saveMessage(message: Message): Promise<Message> {
     const { phone, name, apiKey, ...rest } = message.integration
     message.integration = rest
   }
-  return await supabase.from("messages").insert(message as any).select().single() as Message
+  const { data, error } = await supabase.from("messages").insert(message as any).select().single()
+  if (error) throw error
+  return data as any
 }
