@@ -24,6 +24,7 @@ interface AgentConfig {
   config?: {
     evalItems?: number[]
     escalation_flags?: AgentEscalationFlag[]
+    summaryLanguage?: string
   }
   fork_id?: number | string | null
   fork_base?: AgentConfig | null
@@ -100,6 +101,7 @@ export function createAgent(config: AgentConfig) {
     workers,
     displayData: true,
     evalItems: [] as number[],
+    summaryLanguage: null as string,
     escalationFlags: [] as AgentEscalationFlag[],
 
     parameters: {} as AgentParameters,
@@ -420,6 +422,16 @@ export function createAgent(config: AgentConfig) {
         if (cRow) contact = cRow as unknown as Contact
       }
 
+      // ───── Evaluations ───────────────────────────────────────────────────────────
+
+      if (p.debug) {
+        await agent.updateEvaluations(contact, message, response, userMessageId, agentMessageId, p.apiKeys)
+      } else {
+        setTimeout(async () => {
+          await agent.updateEvaluations(contact, message, response, userMessageId, agentMessageId, p.apiKeys)
+        }, 1)
+      }
+
       // ───── Flags + evals (await in debug; otherwise p.evalPromise) ─────
 
       const canRunFlags = !!(contact && userMessageId && message && response && agent.escalationFlags?.filter(f => f.enabled).length && p.apiKeys?.openai)
@@ -479,19 +491,6 @@ export function createAgent(config: AgentConfig) {
           }
         }
 
-        if (canRunEvals) {
-          if (!p.apiKeys?.openai) return
-          if (p.debug) {
-            await agent.updateEvaluations(contact, message, response, userMessageId, agentMessageId, p.apiKeys)
-          } else {
-            await new Promise<void>((resolve) => {
-              setTimeout(async () => {
-                await agent.updateEvaluations(contact, message, response, userMessageId, agentMessageId, p.apiKeys)
-                resolve()
-              }, 1)
-            })
-          }
-        }
       }
 
       if (canRunFlags || canRunEvals) {
@@ -515,14 +514,21 @@ export function createAgent(config: AgentConfig) {
     },
 
     async updateEvaluations(contact: Contact, message: string, response: string, userMessageId: string, agentMessageId: string, apiKeys: APIKeys) {
+
+      if (!contact) return
+      if (!message) return
+      if (!userMessageId || !agentMessageId) return
+      if (!apiKeys || !apiKeys.openai) return
+
       try {
 
-        const { data: messages, error: messageError } = await supabase.from("messages").select().eq("contact", contact.id).order("created_at", { ascending: true }).limit(10)
-        if (messageError) throw messageError
         const { data: items, error: itemsError } = await supabase.from("eval_items").select().in("id", agent.evalItems)
         if (itemsError) throw itemsError
+        if (items.length === 0) return
+        const { data: messages, error: messageError } = await supabase.from("messages").select().eq("contact", contact.id).order("created_at", { ascending: true }).limit(10)
+        if (messageError) throw messageError
 
-        const result = await evaluate(message, response, messages as any, contact, items as any, apiKeys)
+        const result = await evaluate(message, response, messages as any, contact, items as any, apiKeys, agent.summaryLanguage)
 
         contact = updateContact(contact, result, items as any)
 
@@ -621,6 +627,7 @@ export function configureAgent(data: AgentConfig) {
   agent.description = data.description || ""
   agent.versions = data.versions || []
   agent.evalItems = data.config?.evalItems || []
+  agent.summaryLanguage = data.config?.summaryLanguage
   agent.escalationFlags = data.config?.escalation_flags || []
 
   for (const w of workers) {
@@ -678,6 +685,7 @@ export function getAgentToSave(agent: Agent, team_id?: string) {
     config: {
       evalItems: agent.evalItems || [],
       escalation_flags: agent.escalationFlags || [],
+      summaryLanguage: agent.summaryLanguage || null
     }
   }
   const workerlist = []
@@ -752,6 +760,7 @@ export async function saveAgent(agent: Agent, team_id?: string) {
   const agentData = getAgentToSave(agent, team_id)
   agentData.versions = agent.versions
   agentData.config ||= {}
+  agentData.config.evalItems = agent.evalItems || []
   agentData.config.evalItems = agent.evalItems || []
   agentData.config.escalation_flags = agent.escalationFlags || []
 
