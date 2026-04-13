@@ -111,6 +111,7 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
     return
   }
 
+  await sendTypingIndicator(projectId, r.id)
 
   const p: AgentParameters = {
     input: {
@@ -275,6 +276,15 @@ async function sendMessage(p: SendMessageParameters) {
 
   return r.data
 
+}
+
+
+async function sendTypingIndicator(projectId: string, message_id: string) {
+  try {
+    const telerivetUrl = `https://api.telerivet.com/v1/projects/${projectId}/messages/${message_id}/send_typing_indicator`
+    await axios.post(telerivetUrl)
+  } catch (error) {
+  }
 }
 
 
