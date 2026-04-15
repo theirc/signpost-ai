@@ -1,9 +1,10 @@
 import { codec } from "./encoder"
-import { getOrCreateContact } from "./messages"
+import { getOrCreateContact, saveMessage } from "./messages"
 import { telerivet } from "./telerivet"
 
 export const integrations = {
   telerivet,
   codec,
   getOrCreateContact,
+  saveMessage,
 }

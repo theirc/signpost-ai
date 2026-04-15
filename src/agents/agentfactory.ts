@@ -5,6 +5,9 @@ import { ulid } from 'ulid'
 import { ApiWorker } from "./workers/api"
 import { integrations } from "./integrations"
 import { evaluate, updateContact } from "./evals/evals"
+import { generateObject } from "ai"
+import { createOpenAI } from "@ai-sdk/openai"
+import { z } from "zod"
 
 type LogTypes = "execution" | "error" | "info" | "handoff" | "tool_start" | "tool_end"
 
@@ -20,6 +23,8 @@ interface AgentConfig {
   versions?: AgentVersion[]
   config?: {
     evalItems?: number[]
+    escalation_flags?: AgentEscalationFlag[]
+    summaryLanguage?: string
   }
   fork_id?: number | string | null
   fork_base?: AgentConfig | null
@@ -96,6 +101,8 @@ export function createAgent(config: AgentConfig) {
     workers,
     displayData: true,
     evalItems: [] as number[],
+    summaryLanguage: null as string,
+    escalationFlags: [] as AgentEscalationFlag[],
 
     parameters: {} as AgentParameters,
     type: "data" as AgentTypes,
@@ -252,7 +259,6 @@ export function createAgent(config: AgentConfig) {
       }
     },
 
-
     async execute(p: AgentParameters) {
 
       // ───── Intialization ───────────────────────────────────────────────────────
@@ -268,7 +274,6 @@ export function createAgent(config: AgentConfig) {
       p.team = config.team_id || ""
       p.logWriter ||= () => { }
       p.agent = agent
-      p.integration ||= {}
 
       if (p.debug && agent.debuguuid && !p.uid) p.uid = agent.debuguuid
 
@@ -277,10 +282,12 @@ export function createAgent(config: AgentConfig) {
 
       agent.parameters = p
 
-
       // ───── Contact Detection ───────────────────────────────────────────────────────
 
-      if (p.integration && p.apiKeys.codec) contact = await integrations.getOrCreateContact(p.integration, p.apiKeys.codec, p.team)
+      if (p.integration && p.apiKeys?.codec) {
+        contact = await integrations.getOrCreateContact(p.integration, p.apiKeys.codec, p.team)
+        if (contact?.id) p.integration.contact = contact.id
+      }
 
       // ───── Commands ───────────────────────────────────────────────────────
 
@@ -293,7 +300,6 @@ export function createAgent(config: AgentConfig) {
         console.log("The chat history and state has been reset.")
         return
       }
-
 
       // ───── Clean Workers ───────────────────────────────────────────────────────
 
@@ -317,41 +323,47 @@ export function createAgent(config: AgentConfig) {
         }
       }
 
-      // ───── Message and Contact ────────────────────────────────────────
+      // ───── User message ─────
 
       let userMessageId: string = null
 
       try {
-        if (contact && message) {
-          const { data: userMessage } = await supabase.from("messages").insert({
+        if (contact && message && p.apiKeys?.codec && p.integration) {
+          const userMessage = await integrations.saveMessage({
             contact: contact.id,
             role: "user",
             message,
             channel: p.integration.type,
             team: p.team,
             agent: agent.id,
-          } satisfies Message).select().single()
+            integration: p.integration,
+          })
           userMessageId = userMessage.id
         }
       } catch (error) {
-        console.error("Error saving integration contact:", error)
+        console.error('[Agent] Error saving user message:', error)
+        throw error
       }
 
       // ───── HITL ───────────────────────────────────────────────────────
 
-      if (hasUid && p.state?.agent?.hitl?.active) {
-        await agent.sendUserHITLMessage({
-          causes: p.state.agent?.hitl.causes || [],
-          integration: p.integration || {}
-        })
+      if (p.integration && contact && contact.hitl) {
         agent.currentWorker = null
         agent.update()
         return
       }
 
-      // ───── Execution ───────────────────────────────────────────────────────
+      // if (hasUid && p.state?.agent?.hitl?.active && p.integration) {
+      //   await agent.sendUserHITLMessage({
+      //     causes: p.state.agent?.hitl.causes || [],
+      //     integration: p.integration
+      //   })
+      //   agent.currentWorker = null
+      //   agent.update()
+      //   return
+      // }
 
-      console.log(`Executing agent '${agent.title}'`)
+      // ───── Execution ───────────────────────────────────────────────────────
 
       const worker = agent.getResponseWorker()
       const apiWorkers = agent.getEndAPIWorkers(p)
@@ -368,78 +380,133 @@ export function createAgent(config: AgentConfig) {
 
       } catch (error) {
         await agent.log({ type: "error", message: error?.toString() || "Unknown error" })
-        console.error(error)
+        console.error('[Agent] worker execution error:', error)
         p.error = error.toString()
       }
 
       // ───── Errors ───────────────────────────────────────────────────────
 
       if (p?.error) {
-        console.error(`Agent '${agent.title}' exeuted with error: ${p.error}`)
         agent.currentWorker = null
         agent.update()
         return
       }
 
-      console.log(`Agent '${agent.title}' exeuted successfully`)
-
-      // ───── Message and Contact ────────────────────────────────────────
-
       const response = p.output?.response
       let agentMessageId: string = null
 
+      // ───── Save assistant message ────────────────────────────────────────
+
+      const contactIdForMessage = contact?.id ?? p.integration?.contact
+
       try {
-
-        if (contact && response) {
-
-          const { data: agentMessage } = await supabase.from("messages").insert({
-            contact: contact.id,
+        if (contactIdForMessage && response && p.integration?.type) {
+          const agentMessage = await integrations.saveMessage({
+            contact: contactIdForMessage,
             role: "assistant",
             message: response,
             channel: p.integration.type,
             team: p.team,
             agent: agent.id,
-          } satisfies Message).select().single()
-
+            integration: p.integration,
+          })
           agentMessageId = agentMessage.id
-
         }
-
-        // if (p.integration && p.integration.contact && p.apiKeys && p.apiKeys.codec && response) {
-        //   const { messageId } = await integrations.saveMessage({
-        //     integration: p.integration,
-        //     password: p.apiKeys.codec,
-        //     contact: p.integration.contact,
-        //     team: p.team,
-        //     role: "assistant",
-        //     message: p.output?.response,
-        //     agent: agent.id
-        //   })
-        //   agentMessageId = messageId
-        // }
       } catch (err) {
-        console.error("Error saving integration contact and meessage:", err)
+        console.error('[Agent] Error saving agent message:', err)
+        throw err
       }
 
-      // ───── Evaluations ────────────────────────────────────────
+      if (!contact && contactIdForMessage) {
+        const { data: cRow } = await supabase.from("contacts").select().eq("id", contactIdForMessage).single()
+        if (cRow) contact = cRow as unknown as Contact
+      }
 
-      if (contact && message && response && agent.evalItems?.length && userMessageId && agentMessageId) {
+      // ───── Evaluations ───────────────────────────────────────────────────────────
 
-        if (p.debug) {
+      if (p.debug) {
+        await agent.updateEvaluations(contact, message, response, userMessageId, agentMessageId, p.apiKeys)
+      } else {
+        setTimeout(async () => {
           await agent.updateEvaluations(contact, message, response, userMessageId, agentMessageId, p.apiKeys)
+        }, 1)
+      }
+
+      // ───── Flags + evals (await in debug; otherwise p.evalPromise) ─────
+
+      const canRunFlags = !!(contact && userMessageId && message && response && agent.escalationFlags?.filter(f => f.enabled).length && p.apiKeys?.openai)
+      const canRunEvals = !!(contact && message && response && agent.evalItems?.length && userMessageId && agentMessageId)
+
+      const runFlagsAndEvals = async () => {
+        if (canRunFlags) {
+          const enabledFlags = agent.escalationFlags.filter(f => f.enabled)
+          try {
+            const openai = createOpenAI({ apiKey: p.apiKeys.openai })
+            const now = new Date().toISOString()
+            const customFlags: FlagDetectedItem[] = []
+            const builtinColUpdates: Record<string, number> = {}
+
+            const BUILTIN_FLAG_COL: Record<string, "highrisk" | "lowconf" | "askhuman"> = {
+              high_risk: "highrisk",
+              low_confidence: "lowconf",
+              asked_human: "askhuman",
+            }
+
+            const FlagSchema = z.object({
+              triggered: z.boolean().describe("Whether this flag condition is met"),
+              confidence: z.number().min(0).max(1).describe("Confidence from 0 to 1"),
+              reasoning: z.string().describe("Brief explanation"),
+            })
+
+            await Promise.all(enabledFlags.map(async (flag) => {
+              try {
+                const { object } = await generateObject({
+                  model: openai("gpt-4.1-mini"),
+                  schema: FlagSchema,
+                  system: `You are a flag detection system for a humanitarian AI assistant. Evaluate whether the following condition is met.\n\nCondition: ${flag.detection_prompt}`,
+                  prompt: `User message: ${message}\n\nAgent response: ${response}`,
+                })
+                if (object.triggered && object.confidence >= 0.35) {
+                  const col = BUILTIN_FLAG_COL[flag.id]
+                  if (col) {
+                    builtinColUpdates[col] = 1
+                  } else {
+                    customFlags.push({ flagId: flag.id, status: "flagged", reasoning: object.reasoning, confidence: object.confidence, detectedAt: now })
+                  }
+                  await agent.log({ type: "info", message: `Flag triggered: ${flag.label} (${flag.id}) — ${object.reasoning}` })
+                }
+              } catch (err) {
+                console.error(`[Agent] Error evaluating flag "${flag.id}":`, err)
+              }
+            }))
+
+            if (Object.keys(builtinColUpdates).length > 0 || customFlags.length > 0) {
+              const upd: Record<string, unknown> = { ...builtinColUpdates }
+              if (customFlags.length > 0) upd.custom_message_flags = customFlags
+              const { error: flagErr } = await supabase.from("messages").update(upd as any).eq("id", userMessageId)
+              if (flagErr) console.error('[Agent] Failed to write flag columns / custom_message_flags:', flagErr)
+            }
+          } catch (err) {
+            console.error('[Agent] Escalation flags error:', err)
+          }
+        }
+
+      }
+
+      if (canRunFlags || canRunEvals) {
+        if (p.debug) {
+          await runFlagsAndEvals()
         } else {
-          setTimeout(async () => {
-            await agent.updateEvaluations(contact, message, response, userMessageId, agentMessageId, p.apiKeys)
-          }, 1)
+          p.evalPromise = runFlagsAndEvals()
         }
       }
 
       // ───── End ───────────────────────────────────────────────────────
 
-      if (hasUid && p.state?.agent?.hitl?.active) await agent.sendUserHITLMessage({
-        causes: p.state?.agent?.hitl?.causes || [],
-        integration: p.integration || {}
-      })
+      // if (hasUid && p.state?.agent?.hitl?.active && p.integration) await agent.sendUserHITLMessage({
+      //   causes: p.state?.agent?.hitl?.causes || [],
+      //   integration: p.integration
+      // })
 
       agent.currentWorker = null
       agent.update()
@@ -447,14 +514,21 @@ export function createAgent(config: AgentConfig) {
     },
 
     async updateEvaluations(contact: Contact, message: string, response: string, userMessageId: string, agentMessageId: string, apiKeys: APIKeys) {
+
+      if (!contact) return
+      if (!message) return
+      if (!userMessageId || !agentMessageId) return
+      if (!apiKeys || !apiKeys.openai) return
+
       try {
 
-        const { data: messages, error: messageError } = await supabase.from("messages").select().eq("contact", contact.id).order("created_at", { ascending: true }).limit(10)
-        if (messageError) throw messageError
         const { data: items, error: itemsError } = await supabase.from("eval_items").select().in("id", agent.evalItems)
         if (itemsError) throw itemsError
+        if (items.length === 0) return
+        const { data: messages, error: messageError } = await supabase.from("messages").select().eq("contact", contact.id).order("created_at", { ascending: true }).limit(10)
+        if (messageError) throw messageError
 
-        const result = await evaluate(message, response, messages as any, contact, items as any, apiKeys)
+        const result = await evaluate(message, response, messages as any, contact, items as any, apiKeys, agent.summaryLanguage)
 
         contact = updateContact(contact, result, items as any)
 
@@ -553,7 +627,8 @@ export function configureAgent(data: AgentConfig) {
   agent.description = data.description || ""
   agent.versions = data.versions || []
   agent.evalItems = data.config?.evalItems || []
-
+  agent.summaryLanguage = data.config?.summaryLanguage
+  agent.escalationFlags = data.config?.escalation_flags || []
 
   for (const w of workers) {
     const { handles, ...rest } = w
@@ -608,7 +683,9 @@ export function getAgentToSave(agent: Agent, team_id?: string) {
     team_id,
     debuguuid: agent.debuguuid || "",
     config: {
-      evalItems: agent.evalItems || []
+      evalItems: agent.evalItems || [],
+      escalation_flags: agent.escalationFlags || [],
+      summaryLanguage: agent.summaryLanguage || null
     }
   }
   const workerlist = []
@@ -684,6 +761,8 @@ export async function saveAgent(agent: Agent, team_id?: string) {
   agentData.versions = agent.versions
   agentData.config ||= {}
   agentData.config.evalItems = agent.evalItems || []
+  agentData.config.evalItems = agent.evalItems || []
+  agentData.config.escalation_flags = agent.escalationFlags || []
 
   if (agent.id) {
     await supabase.from("agents").update(agentData as any).eq("id", agent.id)
@@ -969,9 +1048,6 @@ export async function loadAgent(id: number, teamId: string): Promise<Agent | nul
       await w.loadAgent(teamId)
     }
   }
-
-  console.log(agent.evalItems)
-
 
   return agent
 }

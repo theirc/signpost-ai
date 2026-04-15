@@ -1,3 +1,4 @@
+export { }
 
 interface MessageEvaluationItem {
   itemId?: number
@@ -16,8 +17,29 @@ interface MessageComment {
   created_at: number
 }
 
-
 declare global {
+
+  /** Per-agent escalation flag definition, stored in agents.config.escalation_flags */
+  interface AgentEscalationFlag {
+    id: string
+    type: "builtin" | "custom"
+    label: string
+    icon: string
+    detection_prompt: string
+    enabled: boolean
+  }
+
+  /** Per-message custom flag detection result, stored in messages.custom_message_flags */
+  interface FlagDetectedItem {
+    flagId: string
+    status?: "flagged" | "resolved"
+    reasoning?: string
+    confidence?: number
+    detectedAt?: string
+  }
+
+  /** The three builtin flag IDs */
+  type BuiltinFlagId = "high_risk" | "low_confidence" | "asked_human"
 
   type MessageRoles = 'user' | 'assistant' | "human" | "synthetic"
   type ContactTypes = "user" | "operator" | "synthetic" | "ai"
@@ -44,6 +66,7 @@ declare global {
     lasteval?: string
     no_reply_needed?: boolean
     internal_comments?: MessageComment[]
+    hitl?: boolean
 
     evaluation?: {
       [index: string]: EvaluationContactPayload
@@ -92,6 +115,16 @@ declare global {
     agent_detected_items?: MessageEvaluationItem[]
     user_detected_items?: MessageEvaluationItem[]
 
+    integration?: IntegrationPayload
+
+    /** Built-in flags: 0 none, 1 flagged, 2 resolved; null = legacy */
+    highrisk?: number | null
+    lowconf?: number | null
+    askhuman?: number | null
+
+    /** Custom escalation flags only */
+    custom_message_flags?: FlagDetectedItem[]
+
     rating?: "0" | "1"
     rating_example?: string
 
@@ -114,9 +147,12 @@ declare global {
     weight?: number
     type?: "user_message" | "agent_response"
     created_at?: string
-    askhuman?: boolean
-    highrisk?: boolean
-    lowconf?: boolean
+    /** When true, detections for this item count as the “high risk” moderation flag */
+    highrisk?: boolean | null
+    /** When true, detections count as “low confidence” */
+    lowconf?: boolean | null
+    /** When true, detections count as “ask human” */
+    askhuman?: boolean | null
   }
 
 

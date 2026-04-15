@@ -8,7 +8,7 @@ import { ulid } from "ulid"
 const MAX_QUICK_REPLY_LENGTH = 20
 const MAX_QUICK_REPLIES_PER_MESSAGE = 3
 
-export async function telerivetHook(r: TelerivetHookRequest, agent: number) {
+export async function telerivetHook(r: TelerivetHookRequest, agent: number, route_id: string) {
 
   let error: string
 
@@ -111,6 +111,7 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
     return
   }
 
+  await sendTypingIndicator(projectId, r.id)
 
   const p: AgentParameters = {
     input: {
@@ -123,6 +124,9 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
       phone: r.from_number,
       projectId: r.project_id,
       type: "telerivet",
+      route_id: r.integration.route_id,
+      contact_id: r.contact_id,
+      message_id: r.id,
     },
     apiKeys,
     uid,
@@ -142,10 +146,11 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
 
   if (!response && !audio) return "No output found"
 
-  const media_urls: string[] = []
+  const media_urls: string[] = p.output.files || []
+  const quickReplies: string[] = p.output.quickreplies || []
 
   // Extract all image URLs from response (both markdown and plain URLs)
-  if (response) {
+  if (response && media_urls.length == 0) {
     const allowedExt = /\.(jpg|jpeg|png|pdf|doc|docx|ogg|mp4)(\?[^\)\s]*)?$/i
 
     // First, extract markdown file URLs: ![alt](url) or [text](url)
@@ -166,8 +171,8 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
     response = response.replace(/(?<!\]\()https?:\/\/[^\s<>]+/gi, (url) => allowedExt.test(url) ? '' : url).trim()
   }
 
-  const quickReplies: string[] = []
-  if (response) {
+
+  if (response && quickReplies.length == 0) {
     const bracketedRegex = /\[([^\]]+)\]/g
     let match
     while ((match = bracketedRegex.exec(response)) !== null) {
@@ -271,6 +276,15 @@ async function sendMessage(p: SendMessageParameters) {
 
   return r.data
 
+}
+
+
+async function sendTypingIndicator(projectId: string, message_id: string) {
+  try {
+    const telerivetUrl = `https://api.telerivet.com/v1/projects/${projectId}/messages/${message_id}/send_typing_indicator`
+    await axios.post(telerivetUrl)
+  } catch (error) {
+  }
 }
 
 

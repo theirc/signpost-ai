@@ -2,7 +2,6 @@ import { generateObject } from "ai"
 import { z } from "zod"
 import { createOpenAI } from "@ai-sdk/openai"
 import { generateText } from "ai"
-import { supabase } from "../db"
 
 // --- Zod Schema ---
 
@@ -76,7 +75,7 @@ export type EvaluationResult = {
 
 // --- Main Function ---
 
-export async function evaluate(userMessage: string, agentResponse: string, recentMessages: Message[], contact: Contact, evalItems: Evaluation_Item[], keys: APIKeys): Promise<EvaluationResult> {
+export async function evaluate(userMessage: string, agentResponse: string, recentMessages: Message[], contact: Contact, evalItems: Evaluation_Item[], keys: APIKeys, language = "English"): Promise<EvaluationResult> {
 
   const openai = createOpenAI({ apiKey: keys.openai })
 
@@ -137,7 +136,7 @@ ${buildCatalog(agentItems)}
 - Only report an item if there is direct and explicit evidence in the current message. Do not infer, extrapolate, or carry over assumptions from prior context unless the user explicitly references them in this message.
 - A single message about movement restriction or relationship control must not trigger substance abuse, trafficking, or unrelated risk categories unless those are explicitly mentioned.
 - Report any item with confidence >= 0.35. Below that threshold, omit the item entirely.
-- Always respond in English regardless of the language used in the conversation.`
+- Always respond in ${language} regardless of the language used in the conversation.`
 
   const prompt = `## Contact Profile
 Global Severity: ${contact.severity || 0}
@@ -156,18 +155,21 @@ Agent: ${agentResponse}
 
 Evaluate this interaction based on the catalog and contact profile above.`
 
-  console.log("riskItems:", riskItems.length)
-  console.log("descalationItems:", descalationItems.length)
-  console.log("agentItems:", agentItems.length)
-
-  const { object } = await generateObject({
-    model: openai("gpt-5.4-nano"),
-    schema: EvaluationSchema,
-    schemaName: "ConversationEvaluation",
-    schemaDescription: "Evaluation of a single interaction in a humanitarian support conversation",
-    system,
-    prompt,
-  })
+  let object: any
+  try {
+    const result = await generateObject({
+      model: openai("gpt-5.4-nano"),
+      schema: EvaluationSchema,
+      schemaName: "ConversationEvaluation",
+      schemaDescription: "Evaluation of a single interaction in a humanitarian support conversation",
+      system,
+      prompt,
+    })
+    object = result.object
+  } catch (err) {
+    console.error('[Evals] generateObject failed:', err)
+    throw err
+  }
 
   return object
 
@@ -230,9 +232,6 @@ export function updateContact(contact: Contact, result: EvaluationResult, evalIt
   return updated
 
 }
-
-
-
 
 
 export async function generateSyntheticConversation(description: string, apiKey: string): Promise<{ role: "user" | "agent"; content: string }[]> {

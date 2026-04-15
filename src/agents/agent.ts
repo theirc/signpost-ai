@@ -18,6 +18,9 @@ declare global {
     //Telerivet
     apiKey?: string
     projectId?: string
+    route_id?: string
+    contact_id?: string
+    message_id?: string //only used in the messages 
   }
 
   interface AgentState {
@@ -62,6 +65,8 @@ declare global {
     state?: AgentState
     logWriter?: (p: { worker: AIWorker, state: any }) => void
     commandExecuted?: "reset"
+    /** Resolves when the async eval + flag pipeline finishes. Set by agentfactory after execute(). */
+    evalPromise?: Promise<void>
   }
 }
 

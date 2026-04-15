@@ -1,21 +1,18 @@
 /**
  * Server-side Extraction Runner
- * Batch run: fetch contacts from Telerivet, extract per conversation, store results.
- * Node-only (Buffer, direct fetch) — do not import from client.
+ * Batch run: fetch contacts/messages from Supabase, extract per conversation, store results.
  */
 
 import { ExtractionService } from './extraction'
 import { fetchSchemas, markSchemaRun } from './schemas'
 import type { ExtractionSchema, ConversationMessage, ConversationContact } from './types'
+import { supabase } from '../db'
 
 export type RunMode = 'new_only' | 'last_n' | 'date_range' | 'all'
 
 export interface RunOptions {
   teamId: string
-  projectId: string
   apiKeys: APIKeys
-  telerivetApiKey: string
-  phoneId?: string
   schemaId?: string
   mode?: RunMode
   lastN?: number
@@ -35,59 +32,58 @@ export interface RunResult {
 }
 
 const BATCH_SIZE = 10
-const TELERIVET_BASE = 'https://api.telerivet.com/v1'
 
-async function telerivetGet(path: string, apiKey: string): Promise<any> {
-  const auth = Buffer.from(`${apiKey}:`).toString('base64')
-  const res = await fetch(`${TELERIVET_BASE}${path}`, {
-    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+async function fetchContacts(teamId: string): Promise<ConversationContact[]> {
+  const { data: contacts, error } = await supabase
+    .from('contacts')
+    .select('id, name, created_at')
+    .eq('team', teamId)
+    .in('type', ['user', 'synthetic'])
+  if (error) throw error
+
+  const { data: latestRows, error: latestErr } = await supabase
+    .from('messages')
+    .select('contact, created_at')
+    .eq('team', teamId)
+    .order('created_at', { ascending: false })
+    .limit(50000)
+  if (latestErr) throw latestErr
+
+  const latestByContact = new Map<string, number>()
+  ;(latestRows || []).forEach((row: any) => {
+    const cid = row.contact as string
+    if (!cid || latestByContact.has(cid)) return
+    const ts = Math.floor(new Date(row.created_at).getTime() / 1000)
+    latestByContact.set(cid, ts)
   })
-  if (!res.ok) throw new Error(`Telerivet GET ${path} failed: ${res.status}`)
-  return res.json()
+
+  return (contacts || []).map((c: any) => ({
+    id: c.id,
+    name: c.name,
+    phone_number: c.id,
+    vars: {
+      last_message_time: latestByContact.get(c.id) || Math.floor(new Date(c.created_at).getTime() / 1000),
+    },
+  }))
 }
 
-async function fetchContacts(projectId: string, apiKey: string, phoneId?: string): Promise<ConversationContact[]> {
-  const contacts: ConversationContact[] = []
-  let cursor: string | undefined
+async function fetchMessages(teamId: string, contactId: string): Promise<ConversationMessage[]> {
+  const { data: rows, error } = await supabase
+    .from('messages')
+    .select('id, contact, role, message, created_at')
+    .eq('team', teamId)
+    .eq('contact', contactId)
+    .order('created_at', { ascending: true })
+    .limit(500)
+  if (error) throw error
 
-  while (true) {
-    const params = new URLSearchParams({ limit: '200', sort_dir: 'desc' })
-    if (phoneId) params.set('phone_id', phoneId)
-    if (cursor) params.set('cursor', cursor)
-
-    const data = await telerivetGet(`/projects/${projectId}/contacts?${params}`, apiKey)
-    const rows: any[] = data.data || []
-
-    for (const c of rows) {
-      contacts.push({
-        id: c.id,
-        name: c.name,
-        phone_number: c.phone_number,
-        vars: { ...(c.vars || {}), last_message_time: c.last_message_time ?? c.time_updated },
-      })
-    }
-
-    if (!data.next_cursor) break
-    cursor = data.next_cursor
-  }
-
-  return contacts
-}
-
-async function fetchMessages(projectId: string, contactId: string, apiKey: string, phoneId?: string): Promise<ConversationMessage[]> {
-  const params = new URLSearchParams({ contact_id: contactId, limit: '200' })
-  if (phoneId) params.set('phone_id', phoneId)
-
-  const data = await telerivetGet(`/projects/${projectId}/messages?${params}`, apiKey)
-  const rows: any[] = data.data || []
-
-  return rows.map((m: any) => ({
+  return (rows || []).map((m: any) => ({
     id: m.id,
-    direction: m.direction as 'incoming' | 'outgoing',
-    content: m.content || '',
-    time_created: m.time_created,
-    vars: m.vars,
-    contact_id: m.contact_id,
+    direction: m.role === 'assistant' || m.role === 'human' ? 'outgoing' : 'incoming',
+    content: m.message || '',
+    time_created: Math.floor(new Date(m.created_at).getTime() / 1000),
+    vars: {},
+    contact_id: m.contact,
   }))
 }
 
@@ -122,7 +118,7 @@ async function runSchema(schema: ExtractionSchema, allContacts: ConversationCont
   const started_at = Date.now() / 1000
   const eligible = filterContacts(allContacts, schema, opts)
 
-  const svc = new ExtractionService({ apiKeys: opts.apiKeys, telerivetApiKey: opts.telerivetApiKey })
+  const svc = new ExtractionService({ apiKeys: opts.apiKeys })
 
   let processed = 0
   let extractedFields = 0
@@ -133,12 +129,12 @@ async function runSchema(schema: ExtractionSchema, allContacts: ConversationCont
 
     const results = await Promise.allSettled(
       batch.map(async (contact) => {
-        const messages = await fetchMessages(opts.projectId, contact.id, opts.telerivetApiKey, opts.phoneId)
+        const messages = await fetchMessages(opts.teamId, contact.id)
         if (messages.length === 0) return 0
 
         const result = await svc.extractFromConversation(messages, contact, schema)
-        const latestMessageId = messages[0]?.id
-        await svc.storeResults(result, schema, opts.projectId, latestMessageId)
+        const latestMessageId = messages[messages.length - 1]?.id
+        await svc.storeResults(result, schema, latestMessageId)
 
         return Object.keys(result.extracted_data).length
       })
@@ -176,7 +172,7 @@ export async function runExtraction(opts: RunOptions): Promise<RunResult[]> {
 
   if (toRun.length === 0) return []
 
-  const allContacts = await fetchContacts(opts.projectId, opts.telerivetApiKey, opts.phoneId)
+  const allContacts = await fetchContacts(opts.teamId)
 
   const results: RunResult[] = []
   for (const schema of toRun) {
