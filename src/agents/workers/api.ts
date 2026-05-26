@@ -174,7 +174,8 @@ export const api: WorkerRegistryItem = {
   title: "API Call",
   type: "api",
   category: "io",
-  description: "This worker allows you to make external API calls to use other external services.", // Updated description
+  description: "This worker allows you to make external API calls to use other external services.",
+  deprecated: true,
   execute,
   create,
   get registry() { return api },

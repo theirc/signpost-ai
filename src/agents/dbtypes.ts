@@ -136,6 +136,7 @@ declare global {
     description?: string
     // applies_to?: "user_message" | "agent_response" | "conversation" | "all"
     created_at?: string
+    team?: string
   }
 
   interface Evaluation_Item {

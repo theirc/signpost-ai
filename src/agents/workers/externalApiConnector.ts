@@ -302,6 +302,7 @@ export const externalApiConnector: WorkerRegistryItem = {
   type: "externalApiConnector",
   category: "tool",
   description: "Converts HTTP endpoints into agent-callable tools with configurable schemas, auth, rate limiting, and retries",
+  deprecated: true,
   execute,
   create,
   get registry() { return externalApiConnector }

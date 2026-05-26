@@ -15,6 +15,9 @@ declare global {
     name?: string
     phone?: string
 
+    //Whatsapp
+    whatsapp_token?: string
+
     //Telerivet
     apiKey?: string
     projectId?: string
