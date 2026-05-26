@@ -52,6 +52,7 @@ declare global {
     rescuenet?: string
     telerivet?: string
     codec?: string
+    whatsapp?: string
   }
 
   interface AgentParameters {

@@ -112,7 +112,7 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
     return
   }
 
-  await whatsapp.sendTypingIndicator(r.from_number, r.id, r.integration?.token)
+  await whatsapp.sendTypingIndicator(r.from_number, r.id, apiKeys.whatsapp)
 
   const p: AgentParameters = {
     input: {
@@ -305,7 +305,6 @@ export interface TelerivetHookRequest {
   integration?: {
     useDebug?: boolean
     route_id?: string
-    token?: string
   }
 }
 
