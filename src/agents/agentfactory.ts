@@ -286,7 +286,10 @@ export function createAgent(config: AgentConfig) {
 
       if (p.integration && p.apiKeys?.codec) {
         contact = await integrations.getOrCreateContact(p.integration, p.apiKeys.codec, p.team)
-        if (contact?.id) p.integration.contact = contact.id
+        if (contact?.id) {
+          p.integration.contact = contact.id
+          p.uid ||= contact.id
+        }
       }
 
       // ───── Commands ───────────────────────────────────────────────────────
@@ -309,7 +312,7 @@ export function createAgent(config: AgentConfig) {
         w.executed = false
       }
 
-      // ───── State ───────────────────────────────────────────────────────
+      // ───── State ──────────────────────────────────────────────────────────────
 
       const hasUid = !!p.uid
 
@@ -323,7 +326,7 @@ export function createAgent(config: AgentConfig) {
         }
       }
 
-      // ───── User message ─────
+      // ───── User message ─────────────────────────────────────────────
 
       let userMessageId: string = null
 
@@ -352,16 +355,6 @@ export function createAgent(config: AgentConfig) {
         agent.update()
         return
       }
-
-      // if (hasUid && p.state?.agent?.hitl?.active && p.integration) {
-      //   await agent.sendUserHITLMessage({
-      //     causes: p.state.agent?.hitl.causes || [],
-      //     integration: p.integration
-      //   })
-      //   agent.currentWorker = null
-      //   agent.update()
-      //   return
-      // }
 
       // ───── Execution ───────────────────────────────────────────────────────
 

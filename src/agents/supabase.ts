@@ -431,6 +431,7 @@ export type Database = {
           description: string | null
           id: number
           name: string | null
+          team: string | null
         }
         Insert: {
           applies_to?: string | null
@@ -438,6 +439,7 @@ export type Database = {
           description?: string | null
           id?: number
           name?: string | null
+          team?: string | null
         }
         Update: {
           applies_to?: string | null
@@ -445,8 +447,17 @@ export type Database = {
           description?: string | null
           id?: number
           name?: string | null
+          team?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "eval_categories_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       eval_configs: {
         Row: {
@@ -568,6 +579,7 @@ export type Database = {
           key_signals: string | null
           lowconf: boolean | null
           name: string | null
+          team: string | null
           type: string | null
           weight: number | null
         }
@@ -581,6 +593,7 @@ export type Database = {
           key_signals?: string | null
           lowconf?: boolean | null
           name?: string | null
+          team?: string | null
           type?: string | null
           weight?: number | null
         }
@@ -594,6 +607,7 @@ export type Database = {
           key_signals?: string | null
           lowconf?: boolean | null
           name?: string | null
+          team?: string | null
           type?: string | null
           weight?: number | null
         }
@@ -603,6 +617,13 @@ export type Database = {
             columns: ["category"]
             isOneToOne: false
             referencedRelation: "eval_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "eval_items_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
