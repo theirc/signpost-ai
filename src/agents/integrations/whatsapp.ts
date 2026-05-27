@@ -6,7 +6,10 @@ async function sendTypingIndicator(phone: string, message_id: string, token: str
 
   try {
 
-    if (!phone || !message_id || !token) return false
+    if (!phone || !message_id || !token) {
+      console.log(`Missing data: Phone: ${phone || "Missing"}, Message ID: ${message_id || "Missing"}, Token: ${token || "Missing"}`)
+      return false
+    }
 
     const typingPayload = {
       messaging_product: "whatsapp",
@@ -30,6 +33,7 @@ async function sendTypingIndicator(phone: string, message_id: string, token: str
 
     return r.status === 200
   } catch (err) {
+    console.error(`Error contacting whatsapp: ${err}`)
     return false
   }
 
