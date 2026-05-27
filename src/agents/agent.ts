@@ -53,6 +53,7 @@ declare global {
     telerivet?: string
     codec?: string
     whatsapp?: string
+    whatsapp_phone?: string
   }
 
   interface AgentParameters {

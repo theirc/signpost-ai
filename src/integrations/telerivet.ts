@@ -112,7 +112,7 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
     return
   }
 
-  await whatsapp.sendTypingIndicator(r.from_number, r.external_id, apiKeys.whatsapp)
+  await whatsapp.sendTypingIndicator(apiKeys.whatsapp_phone, r.external_id, apiKeys.whatsapp)
 
   const p: AgentParameters = {
     input: {
