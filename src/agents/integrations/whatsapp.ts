@@ -4,6 +4,8 @@ const baseUrl = "https://graph.facebook.com/v25.0"
 
 async function sendTypingIndicator(phone: string, message_id: string, token: string): Promise<boolean> {
 
+  phone = "575076972363150"
+
   try {
 
     if (!phone || !message_id || !token) {
