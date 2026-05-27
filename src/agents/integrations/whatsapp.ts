@@ -11,6 +11,14 @@ async function sendTypingIndicator(phone: string, message_id: string, token: str
       return false
     }
 
+    console.log(`Sending to: 
+      Phone: ${phone || "Missing"} 
+      Message ID: ${message_id || "Missing"}
+      Token: ${token || "Missing"}`)
+
+    phone = phone.replace("+", "")
+    phone = phone.trim()
+
     const typingPayload = {
       messaging_product: "whatsapp",
       status: "read",
@@ -20,9 +28,7 @@ async function sendTypingIndicator(phone: string, message_id: string, token: str
       }
     }
 
-    const typingUrl = `${baseUrl}/${phone}/messages`
-
-    const r = await axios.post(typingUrl,
+    const r = await axios.post(`${baseUrl}/${phone}/messages`,
       typingPayload,
       {
         headers: {
