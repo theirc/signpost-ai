@@ -8,6 +8,7 @@ import { evaluate, updateContact } from "./evals/evals"
 import { generateObject } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
 import { z } from "zod"
+import { whatsapp } from "./integrations/whatsapp"
 
 type LogTypes = "execution" | "error" | "info" | "handoff" | "tool_start" | "tool_end"
 
@@ -25,6 +26,10 @@ interface AgentConfig {
     evalItems?: number[]
     escalation_flags?: AgentEscalationFlag[]
     summaryLanguage?: string
+    integrations?: {
+      whatsapp_token?: string
+      whatsapp_phoneid?: string
+    }
   }
   fork_id?: number | string | null
   fork_base?: AgentConfig | null
@@ -101,6 +106,10 @@ export function createAgent(config: AgentConfig) {
     workers,
     displayData: true,
     evalItems: [] as number[],
+    integrations: {
+      whatsapp_token: null as string,
+      whatsapp_phoneid: null as string,
+    },
     summaryLanguage: null as string,
     escalationFlags: [] as AgentEscalationFlag[],
 
@@ -621,6 +630,7 @@ export function configureAgent(data: AgentConfig) {
   agent.versions = data.versions || []
   agent.evalItems = data.config?.evalItems || []
   agent.summaryLanguage = data.config?.summaryLanguage
+  agent.integrations = data.config?.integrations || {} as any
   agent.escalationFlags = data.config?.escalation_flags || []
 
   for (const w of workers) {
@@ -678,7 +688,8 @@ export function getAgentToSave(agent: Agent, team_id?: string) {
     config: {
       evalItems: agent.evalItems || [],
       escalation_flags: agent.escalationFlags || [],
-      summaryLanguage: agent.summaryLanguage || null
+      summaryLanguage: agent.summaryLanguage || null,
+      integrations: agent.integrations || {}
     }
   }
   const workerlist = []
@@ -754,7 +765,7 @@ export async function saveAgent(agent: Agent, team_id?: string) {
   agentData.versions = agent.versions
   agentData.config ||= {}
   agentData.config.evalItems = agent.evalItems || []
-  agentData.config.evalItems = agent.evalItems || []
+  agentData.config.integrations ||= {}
   agentData.config.escalation_flags = agent.escalationFlags || []
 
   if (agent.id) {
