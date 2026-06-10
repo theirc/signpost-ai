@@ -9,7 +9,7 @@ import { executeCronJobs } from './cron'
 import Exa from 'exa-js'
 import { telerivetHook, type TelerivetHookRequest } from './integrations/telerivet'
 
-const version = '2.0608.1525'
+const version = '2.0610.1618'
 
 const app = express()
 app.use(cors())
@@ -262,6 +262,8 @@ app.post('/integrations/:provider/:agent', async (req, res) => {
   body.integration = {}
   body.integration.useDebug = !!req.query.debug
   body.integration.route_id = req.query.route_id as string || null
+
+  // https://signpost-ia-app-qa.azurewebsites.net/integrations/telerivet/513?debug=1
 
   try {
     if (provider === "telerivet") {

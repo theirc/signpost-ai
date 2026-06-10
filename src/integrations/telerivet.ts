@@ -16,7 +16,7 @@ export async function telerivetHook(r: TelerivetHookRequest, agent: number, rout
   try {
     error = await internalTelerivetHook(r, agent)
   } catch (error) {
-    error = `Catch Error: ${error || "Unknown error"}`
+    error = `Telerivet Hook Error: ${error || "Unknown error"}`
   }
 
   console.log(`Telerivet: ${error ? error : "No incidents recorded."}`)
@@ -116,7 +116,11 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
   const whatsapp_phone_id = a.integrations?.whatsapp_phoneid || apiKeys.whatsapp_phone
   const whatsapp_token = a.integrations?.whatsapp_token || apiKeys.whatsapp
 
-  await whatsapp.sendTypingIndicator(whatsapp_phone_id, message_id, whatsapp_token)
+  await whatsapp.sendTypingIndicator({
+    message_id,
+    phone: whatsapp_phone_id,
+    token: whatsapp_token
+  })
 
   const p: AgentParameters = {
     input: {
@@ -149,10 +153,30 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
 
   let { response, audio } = p.output || {}
 
-  if (!response && !audio) return "No output found"
-
   const media_urls: string[] = p.output.files || []
   const quickReplies: string[] = p.output.quickreplies || []
+
+
+  if (audio) {
+    const base64String = audio.audio
+    const f = await supabase.storage.from('temp').upload(`${ulid()}.ogg`, Buffer.from(base64String, 'base64'), { contentType: 'audio/ogg' })
+    const { data } = supabase.storage.from('temp').getPublicUrl(f.data.path)
+    media_urls.push(data.publicUrl)
+  }
+
+  if (!response && media_urls.length == 0 && quickReplies.length == 0) return "No output found"
+
+  if (a.integrations?.telerivet_answerViaWhatsapp) {
+    return await whatsapp.send({
+      token: whatsapp_token,
+      phone: whatsapp_phone_id,
+      to: r.from_number,
+      message: response,
+      files: media_urls,
+      quickReplies,
+      message_id,
+    })
+  }
 
   // Extract all image URLs from response (both markdown and plain URLs)
   if (response && media_urls.length == 0) {
@@ -176,7 +200,6 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
     response = response.replace(/(?<!\]\()https?:\/\/[^\s<>]+/gi, (url) => allowedExt.test(url) ? '' : url).trim()
   }
 
-
   if (response && quickReplies.length == 0) {
     const bracketedRegex = /\[([^\]]+)\]/g
     let match
@@ -185,14 +208,6 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
     }
     // Remove all [bracketed] text from response
     response = response.replace(/\[[^\]]+\]/g, '').trim()
-  }
-
-
-  if (audio) {
-    const base64String = audio.audio
-    const f = await supabase.storage.from('temp').upload(`${ulid()}.ogg`, Buffer.from(base64String, 'base64'), { contentType: 'audio/ogg' })
-    const { data } = supabase.storage.from('temp').getPublicUrl(f.data.path)
-    media_urls.push(data.publicUrl)
   }
 
   const to_number = r.from_number
@@ -230,7 +245,6 @@ interface SendMessageParameters {
   route_id?: string
 }
 
-//async function sendMessage(content: string, to_number: string, projectId: string, api_key: string, quickReplies: string[], media_url?: string) {
 async function sendMessage(p: SendMessageParameters) {
 
   const { content, to_number, projectId, api_key, quickReplies, media_url, route_id } = p

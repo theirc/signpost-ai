@@ -8,7 +8,6 @@ import { evaluate, updateContact } from "./evals/evals"
 import { generateObject } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
 import { z } from "zod"
-import { whatsapp } from "./integrations/whatsapp"
 
 type LogTypes = "execution" | "error" | "info" | "handoff" | "tool_start" | "tool_end"
 
@@ -27,6 +26,7 @@ interface AgentConfig {
     escalation_flags?: AgentEscalationFlag[]
     summaryLanguage?: string
     integrations?: {
+      telerivet_answerViaWhatsapp?: boolean
       whatsapp_token?: string
       whatsapp_phoneid?: string
     }
@@ -107,6 +107,7 @@ export function createAgent(config: AgentConfig) {
     displayData: true,
     evalItems: [] as number[],
     integrations: {
+      telerivet_answerViaWhatsapp: false,
       whatsapp_token: null as string,
       whatsapp_phoneid: null as string,
     },
