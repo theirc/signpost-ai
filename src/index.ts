@@ -9,7 +9,7 @@ import { executeCronJobs } from './cron'
 import Exa from 'exa-js'
 import { telerivetHook, type TelerivetHookRequest } from './integrations/telerivet'
 
-const version = '2.0413.1745'
+const version = '2.0608.1525'
 
 const app = express()
 app.use(cors())

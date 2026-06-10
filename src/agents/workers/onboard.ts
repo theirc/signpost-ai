@@ -21,6 +21,7 @@ declare global {
     fields: {
       input: NodeIO
       output: NodeIO
+      history: NodeIO
       summary: NodeIO
       finished: NodeIO
     }
@@ -54,6 +55,7 @@ function create(agent: Agent) {
       { type: "string", direction: "input", title: "Input", name: "input" },
       { type: "string", direction: "output", title: "Output", name: "output" },
       { type: "string", direction: "output", title: "Summary", name: "summary" },
+      { type: "chat", direction: "input", title: "History", name: "history" },
       { type: "boolean", direction: "output", title: "Finished", name: "finished" },
     ],
     onboard
@@ -72,15 +74,11 @@ function getNext(items: OnboardItem[], state: State): OnboardItem {
 
 async function execute(worker: OnboardWorker, p: AgentParameters) {
 
-  // worker.state = {}
-  // return
-
   const { parameters } = worker
 
   const state: State = worker.state as any
   state.questions ||= {}
 
-  const handlers = worker.getUserHandlers()
   let input: string = worker.fields.input.value || ""
   worker.fields.output.value = ""
   input = input.trim().toLowerCase()
@@ -162,13 +160,20 @@ async function execute(worker: OnboardWorker, p: AgentParameters) {
 
   for (let i of parameters.items) {
     if (!state.questions[i.name]) continue
-    worker.fields[i.name] = state.questions[i.name]
+    worker.fields[i.name].value = state.questions[i.name]
     if (!i.summarize) continue
     summary += (i.title || i.name || "Item") + ": " + (state.questions[i.name] || "") + "\n"
   }
-
   worker.fields.summary.value = summary
 
+
+  const historyWorkers = worker.getConnectedWokersToHandle(worker.fields.history, p).filter((w) => w.config.type === "chatHistory") as any as ChatHistoryWorker[]
+  const hw = historyWorkers[0]
+
+  if (hw && !worker.fields.finished.value) {
+    await hw.addMessageToHistory(p.uid, `${worker.agent.id}`, p.team, "user", input)
+    await hw.addMessageToHistory(p.uid, `${worker.agent.id}`, p.team, "assistant", worker.fields.output.value)
+  }
 
 }
 

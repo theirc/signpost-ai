@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import { env } from "../env"
 import axios from "axios"
 import { ulid } from "ulid"
+import { whatsapp } from "../agents/integrations/whatsapp"
 
 const MAX_QUICK_REPLY_LENGTH = 20
 const MAX_QUICK_REPLIES_PER_MESSAGE = 3
@@ -111,7 +112,11 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
     return
   }
 
-  await sendTypingIndicator(projectId, r.id)
+  const message_id = r.external_id
+  const whatsapp_phone_id = a.integrations?.whatsapp_phoneid || apiKeys.whatsapp_phone
+  const whatsapp_token = a.integrations?.whatsapp_token || apiKeys.whatsapp
+
+  await whatsapp.sendTypingIndicator(whatsapp_phone_id, message_id, whatsapp_token)
 
   const p: AgentParameters = {
     input: {
@@ -277,16 +282,6 @@ async function sendMessage(p: SendMessageParameters) {
   return r.data
 
 }
-
-
-async function sendTypingIndicator(projectId: string, message_id: string) {
-  try {
-    const telerivetUrl = `https://api.telerivet.com/v1/projects/${projectId}/messages/${message_id}/send_typing_indicator`
-    await axios.post(telerivetUrl)
-  } catch (error) {
-  }
-}
-
 
 function encode(text: string): string {
   const password = env.TELERIVET_SALT
