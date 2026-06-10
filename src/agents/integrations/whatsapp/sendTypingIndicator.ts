@@ -1,11 +1,14 @@
 import axios from "axios"
+import { baseUrl } from "./config"
 
-const baseUrl = "https://graph.facebook.com/v25.0"
+export interface SendTypingIndicatorParams {
+  phone: string
+  message_id: string
+  token: string
+}
 
-async function sendTypingIndicator(phone: string, message_id: string, token: string): Promise<boolean> {
-
+export async function sendTypingIndicator({ phone, message_id, token }: SendTypingIndicatorParams): Promise<boolean> {
   try {
-
     if (!phone || !message_id || !token) {
       console.log(`Missing data: Phone: ${phone || "Missing"}, Message ID: ${message_id || "Missing"}, Token: ${token || "Missing"}`)
       return false
@@ -16,8 +19,7 @@ async function sendTypingIndicator(phone: string, message_id: string, token: str
       Message ID: ${message_id || "Missing"}
       Token: ${token || "Missing"}`)
 
-    phone = phone.replace("+", "")
-    phone = phone.trim()
+    phone = phone.replace("+", "").trim()
 
     const typingPayload = {
       messaging_product: "whatsapp",
@@ -39,13 +41,7 @@ async function sendTypingIndicator(phone: string, message_id: string, token: str
 
     return r.status === 200
   } catch (err) {
-    console.error(`Error contacting whatsapp: ${err}`)
+    console.error(`Error sending typing indicator: ${err}`)
     return false
   }
-
 }
-
-export const whatsapp = {
-  sendTypingIndicator,
-}
-
