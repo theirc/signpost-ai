@@ -42,7 +42,8 @@ interface InvokeModelParams {
   history: AgentInputItem[]
   handoffs: any[]
   tools: FunctionTool[]
-  logAgent: { log: (data: any) => void }
+  logAgent: { log: (data: any) => void; toolCallNodes: any[]; update: () => void }
+  sourceWorkerId: string
 }
 
 interface ToolCallDetail {
@@ -61,7 +62,7 @@ interface InvokeModelResult {
 }
 
 async function invokeModel(params: InvokeModelParams): Promise<InvokeModelResult> {
-  const { modelId, apiKeys, instructions, history, handoffs, tools, logAgent } = params
+  const { modelId, apiKeys, instructions, history, handoffs, tools, logAgent, sourceWorkerId } = params
 
   const baseModel = createModel(apiKeys, modelId)
   if (!baseModel) throw new Error("Failed to create model")
@@ -82,14 +83,27 @@ async function invokeModel(params: InvokeModelParams): Promise<InvokeModelResult
     const message = `LLM Agent handoff to Agent with description '${agent.handoffDescription}'`
     logAgent.log({ type: "handoff", message, })
   })
-  agent.on("agent_tool_start", (ctx, b) => {
+  // Track in-flight tool calls by name so we can update them on end
+  const liveToolCalls = new Map<string, any>()
+
+  agent.on("agent_tool_start", (ctx, b, extra) => {
     const message = `LLM Agent Tool '${b.name}' Start`
     logAgent.log({ type: "tool_start", message, })
+    const args = (extra as any)?.toolCall?.arguments ?? "{}"
+    const entry = { name: b.name, arguments: args, result: "", sourceWorkerId }
+    liveToolCalls.set(b.name, entry)
+    logAgent.toolCallNodes = [...(logAgent.toolCallNodes || []), entry]
+    logAgent.update()
   })
-  agent.on("agent_tool_end", (ctx, b) => {
+  agent.on("agent_tool_end", (ctx, b, result) => {
     const message = `LLM Agent Tool '${b.name}' End`
     logAgent.log({ type: "tool_end", message, })
     if (ctx['searchResults']) searchContext += `\n\nSearch Results for tool ${b.name}:\n${ctx['searchResults']}`
+    const entry = liveToolCalls.get(b.name)
+    if (entry) {
+      entry.result = typeof result === "string" ? result : JSON.stringify(result)
+      logAgent.update()
+    }
   })
 
   const result = await run(agent, history)
@@ -209,6 +223,7 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
     handoffs,
     tools,
     logAgent: p.agent,
+    sourceWorkerId: worker.id,
   }
 
   let result: InvokeModelResult
@@ -242,14 +257,7 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
 
   worker.fields.output.value = result.finalOutput
 
-  if (result.toolCalls.length > 0) {
-    p.agent.toolCallNodes = result.toolCalls.map((tc) => ({
-      name: tc.name,
-      arguments: tc.arguments,
-      result: tc.result,
-      sourceWorkerId: worker.id,
-    }))
-  }
+  // toolCallNodes are populated live via agent_tool_start/end events above
 
 }
 

@@ -27,6 +27,7 @@ const EvaluationSchema = z.object({
         reasoning: z.string().describe("Brief explanation of why this agent item was detected"),
       })
     ).describe("List of agent performance items detected in the agent response"),
+    summary: z.string().nullable().describe("Updated cumulative summary of agent performance written in markdown format. Must incorporate prior agent summary plus new findings without repetition. Never remove prior information. Null if no meaningful new findings."),
   }),
 
   escalation: z.object({
@@ -61,6 +62,7 @@ export type EvaluationResult = {
     }[]
     appropriate?: boolean
     concernLevel?: number
+    summary?: string
   }
   escalation?: {
     reasoning?: string
@@ -75,7 +77,18 @@ export type EvaluationResult = {
 
 // --- Main Function ---
 
-export async function evaluate(userMessage: string, agentResponse: string, recentMessages: Message[], contact: Contact, evalItems: Evaluation_Item[], keys: APIKeys, language = "English"): Promise<EvaluationResult> {
+interface EvaluateParams {
+  userMessage: string
+  agentResponse: string
+  recentMessages: Message[]
+  contact: Contact
+  evalItems: Evaluation_Item[]
+  keys: APIKeys
+  language?: string
+  agentSummary: string
+}
+
+export async function evaluate({ userMessage, agentResponse, recentMessages, contact, evalItems, keys, language = "English", agentSummary = "" }: EvaluateParams): Promise<EvaluationResult> {
 
   const openai = createOpenAI({ apiKey: keys.openai })
 
@@ -131,6 +144,7 @@ ${buildCatalog(agentItems)}
 - Descalation items can always be reported when clearly present.
 - Detect escalation only if toLevel is strictly greater than fromLevel. If levels are equal, detected must be false.
 - Only update the narrative summary if meaningful new information emerged. The summary must always include all prior history plus new developments. Never remove or summarize away existing information, only add.
+- agentEvaluation.summary: Update only if there are meaningful new findings about the agent's behavior. Merge the prior agent summary with new observations — no repetition, never remove prior content. Write in ${language}, use markdown, be complete and detailed. Return null if nothing new to add.
 - Be concise in all reasoning fields. One or two sentences maximum.
 - Always return detectedItems and agentEvaluation.detectedItems as arrays, even if empty.
 - Only report an item if there is direct and explicit evidence in the current message. Do not infer, extrapolate, or carry over assumptions from prior context unless the user explicitly references them in this message.
@@ -145,6 +159,9 @@ Known items: ${Object.keys(contact.evaluation || {}).length > 0
       ? Object.entries(contact.evaluation || {}).map(([id, v]) => `${id} (severity: ${v.lastSeverity || 0}, seen ${v.count || 0}x)`).join(", ")
       : "None"
     }
+
+## Agent Performance History
+${agentSummary || "No prior agent evaluation history."}
 
 ## Recent Conversation
 ${recentContext}

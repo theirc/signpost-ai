@@ -31,6 +31,7 @@ import { vision } from "./workers/vision"
 import { externalApiConnector } from "./workers/externalApiConnector"
 import { apiConnector } from "./workers/apiConnector"
 import { extraction } from "./workers/extraction"
+import { writeFlags } from "./workers/writeflags"
 
 
 type WorkerCategories = "io" | "generator" | "debug" | "tool"
@@ -92,5 +93,6 @@ export const workerRegistry = {
   externalApiConnector,
   apiConnector,
   extraction,
+  writeFlags,
 
 } satisfies { [index: string]: WorkerRegistryItem }
