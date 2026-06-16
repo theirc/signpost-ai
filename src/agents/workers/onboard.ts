@@ -171,8 +171,8 @@ async function execute(worker: OnboardWorker, p: AgentParameters) {
   const hw = historyWorkers[0]
 
   if (hw && !worker.fields.finished.value) {
-    await hw.addMessageToHistory(p.uid, `${worker.agent.id}`, p.team, "user", input)
-    await hw.addMessageToHistory(p.uid, `${worker.agent.id}`, p.team, "assistant", worker.fields.output.value)
+    await hw.addMessageToHistory(p.uid, `${worker.agent.id}`, p.team, "user", input, hw.id)
+    await hw.addMessageToHistory(p.uid, `${worker.agent.id}`, p.team, "assistant", worker.fields.output.value, hw.id)
   }
 
 }

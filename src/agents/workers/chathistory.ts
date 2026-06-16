@@ -19,7 +19,7 @@ declare global {
       output: NodeIO
     }
     saveHistory(worker: ChatHistoryWorker, p: AgentParameters, history: AgentInputItem[], searchContext?: string, inputTokens?: number, outputTokens?: number): Promise<void>
-    addMessageToHistory(uid: string, agent: string, team: string, role: 'user' | 'assistant' | "human", text: string): Promise<void>
+    addMessageToHistory(uid: string, agent: string, team: string, role: 'user' | 'assistant' | "human", text: string, workerId?: string): Promise<void>
 
   }
 }
@@ -151,7 +151,7 @@ async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, histor
 
 }
 
-async function addMessageToHistory(uid: string, agent: string, team: string, role: 'user' | 'assistant' | "human", text: string): Promise<void> {
+async function addMessageToHistory(uid: string, agent: string, team: string, role: 'user' | 'assistant' | "human", text: string, workerId?: string): Promise<void> {
 
   if (!uid || !agent || !role || !text) return
 
@@ -160,6 +160,7 @@ async function addMessageToHistory(uid: string, agent: string, team: string, rol
   const newItemsToSave = {
     uid,
     agent,
+    worker: workerId || null,
     role,
     type: "message",
     team,

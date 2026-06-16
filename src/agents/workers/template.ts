@@ -26,7 +26,7 @@ function create(agent: Agent) {
 async function execute(worker: TemplateWorker, p: AgentParameters) {
 
   const userFields = worker.getUserHandlers()
-  const values = {}
+  const values: Record<string, any> = {}
   const templateText = worker.fields.template.value
   if (!templateText) return
 
@@ -34,6 +34,14 @@ async function execute(worker: TemplateWorker, p: AgentParameters) {
     if (!h.value) continue
     values[h.name] = h.value
   }
+
+  // Inject historical flag state so templates can reference {{flags.asked_human}} etc.
+  // Values: "flagged", "resolved", or "" (not set)
+  console.log("[template] flagsContext:", (p as any).flagsContext)
+  if ((p as any).flagsContext) {
+    values["flags"] = (p as any).flagsContext
+  }
+  console.log("[template] values.flags:", values["flags"])
 
   // Register Handlebars helpers
   Handlebars.registerHelper('includes', function (str, search) {

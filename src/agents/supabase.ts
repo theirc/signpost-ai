@@ -46,6 +46,7 @@ export type Database = {
           debuguuid: string | null
           description: string | null
           edges: Json | null
+          evaluation: string | null
           fork_base: Json | null
           fork_id: string | null
           id: number
@@ -62,6 +63,7 @@ export type Database = {
           debuguuid?: string | null
           description?: string | null
           edges?: Json | null
+          evaluation?: string | null
           fork_base?: Json | null
           fork_id?: string | null
           id?: number
@@ -78,6 +80,7 @@ export type Database = {
           debuguuid?: string | null
           description?: string | null
           edges?: Json | null
+          evaluation?: string | null
           fork_base?: Json | null
           fork_id?: string | null
           id?: number
