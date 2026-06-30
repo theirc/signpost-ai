@@ -8,8 +8,9 @@ import { supabase } from './agents/db'
 import { executeCronJobs } from './cron'
 import Exa from 'exa-js'
 import { telerivetHook, type TelerivetHookRequest } from './integrations/telerivet'
+import { whatsapp } from './agents/integrations/whatsapp'
 
-const version = '2.0616.1200'
+const version = '2.0630.1258'
 
 const app = express()
 app.use(cors())
@@ -79,7 +80,6 @@ app.post('/agent', async (req: Request<any, any, AgentParameters & { id: number,
     res.status(500).send(er)
   }
 })
-
 
 app.post('/decors', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -205,8 +205,6 @@ app.use('/decorsify/', async (req: Request, res: Response): Promise<void> => {
   }
 })
 
-
-
 app.post('/cron', async (req, res) => {
 
   try {
@@ -252,25 +250,58 @@ app.post('/exa', async (req, res) => {
 })
 
 
-app.post('/integrations/:provider/:agent', async (req, res) => {
-  const { provider, agent } = req.params
-  const body: TelerivetHookRequest = req.body
+app.post('/integrations/telerivet/:agent', async (req, res) => {
   res.end()
 
-  if (!provider || !agent || !body) return
+  // https://signpost-ia-app-qa.azurewebsites.net/integrations/telerivet/513?debug=1
+
+  const { agent } = req.params
+  const body: TelerivetHookRequest = req.body
+  if (!agent || !body) return
 
   body.integration = {}
   body.integration.useDebug = !!req.query.debug
   body.integration.route_id = req.query.route_id as string || null
 
-  // https://signpost-ia-app-qa.azurewebsites.net/integrations/telerivet/513?debug=1
-
   try {
-    if (provider === "telerivet") {
-      await telerivetHook(body, Number(agent), body.integration.route_id)
-    }
+    await telerivetHook(body, Number(agent), body.integration.route_id)
   } catch (error) {
     console.error(`Error Executing Telerivet Integration ${error}`)
+  }
+
+})
+
+app.all('/integrations/whatsapp/:agent', async (req, res) => {
+
+  //https://nbdbrtkf-3000.brs.devtunnels.ms/integrations/whatsapp/513
+
+  if (req.method === 'GET') {
+    const { 'hub.mode': mode, 'hub.challenge': challenge, 'hub.verify_token': token } = req.query
+    if (mode === 'subscribe') {
+      console.log('Whatsapp Subscription Verified')
+      res.status(200).send(challenge)
+    } else {
+      res.status(403).end()
+    }
+    return
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).send("Method Not Allowed")
+    return
+  }
+
+  res.end()
+
+  const { agent } = req.params
+  const body = req.body
+
+  if (!agent || !body) return
+
+  try {
+    await whatsapp.processHook({ agent: Number(agent), payload: body, debug: !!req.query.debug })
+  } catch (error) {
+    console.error(`Error Executing Whatsapp Integration ${error}`)
   }
 
 })

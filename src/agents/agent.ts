@@ -7,7 +7,7 @@ declare global {
   type Agent = ReturnType<typeof createAgent>
   type EdgeConnections = { [index: string]: { source: string, target: string, sourceHandle: string, targetHandle: string } }
 
-  type IntegrationsTypes = "telerivet" | "app"
+  type IntegrationsTypes = "telerivet" | "app" | "whatsapp"
 
   interface IntegrationPayload {
     contact?: string //cross channel unique user id. If empty is created based on the integration data, usually the phone.
@@ -51,6 +51,7 @@ declare global {
     codec?: string
     whatsapp?: string
     whatsapp_phone?: string
+    boxnet?: string
   }
 
   interface AgentParameters {

@@ -708,6 +708,38 @@ export type Database = {
           },
         ]
       }
+      forms: {
+        Row: {
+          created_at: string
+          fields: Json | null
+          id: string
+          team: string | null
+          title: string | null
+        }
+        Insert: {
+          created_at?: string
+          fields?: Json | null
+          id?: string
+          team?: string | null
+          title?: string | null
+        }
+        Update: {
+          created_at?: string
+          fields?: Json | null
+          id?: string
+          team?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forms_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       geospatial: {
         Row: {
           created_at: string

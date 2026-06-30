@@ -19,7 +19,7 @@ export async function telerivetHook(r: TelerivetHookRequest, agent: number, rout
     error = `Telerivet Hook Error: ${error || "Unknown error"}`
   }
 
-  console.log(`Telerivet: ${error ? error : "No incidents recorded."}`)
+  if (error) console.error(`Telerivet: ${error}`)
 
   if (r.integration && r.integration.useDebug && error) {
     try {
@@ -167,7 +167,7 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
   if (!response && media_urls.length == 0 && quickReplies.length == 0) return "No output found"
 
   if (a.integrations?.telerivet_answerViaWhatsapp) {
-    return await whatsapp.send({
+    await whatsapp.send({
       token: whatsapp_token,
       phone: whatsapp_phone_id,
       to: r.from_number,
@@ -176,6 +176,7 @@ async function internalTelerivetHook(r: TelerivetHookRequest, agent: number) {
       quickReplies,
       message_id,
     })
+    return
   }
 
   // Extract all image URLs from response (both markdown and plain URLs)
