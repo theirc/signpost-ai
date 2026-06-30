@@ -321,7 +321,8 @@ export function createAgent(config: AgentConfig) {
 
       // ───── Commands ───────────────────────────────────────────────────────
 
-      if (message && message.trim().toLowerCase() === "/reset") {
+      const cleanMessageForCommand = message?.trim().toLowerCase() || ""
+      if (cleanMessageForCommand === "/reset" || cleanMessageForCommand === "/إعادة تشغيل") {
         await agent.resetAgent(p.uid, contact?.id)
         p.output.response = "The chat history and state has been reset."
         p.commandExecuted = "reset"

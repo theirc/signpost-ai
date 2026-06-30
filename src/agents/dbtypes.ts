@@ -156,6 +156,20 @@ declare global {
     askhuman?: boolean | null
   }
 
+  interface Form {
+    id?: string
+    title: string
+    fields?: {
+      title: string
+      name: string,
+      required?: boolean
+      type: "string" | "number" | "boolean" | "list"
+      list?: { label: string, value: string }[]
+    }[]
+    team?: string
+    created_at?: string
+  }
+
 
 
 }

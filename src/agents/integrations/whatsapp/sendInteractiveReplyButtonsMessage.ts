@@ -17,6 +17,12 @@ export interface SendInteractiveReplyButtonsMessageParams {
   context?: { message_id: string }
 }
 
+function buildHeader(header: SendInteractiveReplyButtonsMessageParams["header"]) {
+  if (!header) return undefined
+  if (header.type === "text") return { type: "text", text: header.text }
+  return { type: header.type, [header.type]: { link: header.link } }
+}
+
 export async function sendInteractiveReplyButtonsMessage({ phone, token, to, body, buttons, header, footer, context }: SendInteractiveReplyButtonsMessageParams): Promise<string> {
 
   try {
@@ -25,6 +31,8 @@ export async function sendInteractiveReplyButtonsMessage({ phone, token, to, bod
 
     phone = phone.replace("+", "").trim()
 
+    const headerPayload = buildHeader(header)
+
     const payload: Record<string, unknown> = {
       messaging_product: "whatsapp",
       recipient_type: "individual",
@@ -32,7 +40,7 @@ export async function sendInteractiveReplyButtonsMessage({ phone, token, to, bod
       type: "interactive",
       interactive: {
         type: "button",
-        ...(header !== undefined && { header }),
+        ...(headerPayload && { header: headerPayload }),
         body: { text: body },
         ...(footer !== undefined && { footer: { text: footer } }),
         action: {

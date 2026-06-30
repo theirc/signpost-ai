@@ -10,14 +10,9 @@ export interface SendTypingIndicatorParams {
 export async function sendTypingIndicator({ phone, message_id, token }: SendTypingIndicatorParams): Promise<boolean> {
   try {
     if (!phone || !message_id || !token) {
-      console.log(`Missing data: Phone: ${phone || "Missing"}, Message ID: ${message_id || "Missing"}, Token: ${token || "Missing"}`)
+      console.log(`Missing data for Whatsapp: Phone: ${phone || "Missing"}, Message ID: ${message_id || "Missing"}, Token: ${token || "Missing"}`)
       return false
     }
-
-    console.log(`Sending to: 
-      Phone: ${phone || "Missing"} 
-      Message ID: ${message_id || "Missing"}
-      Token: ${token || "Missing"}`)
 
     phone = phone.replace("+", "").trim()
 
