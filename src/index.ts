@@ -9,8 +9,9 @@ import { executeCronJobs } from './cron'
 import Exa from 'exa-js'
 import { telerivetHook, type TelerivetHookRequest } from './integrations/telerivet'
 import { whatsapp } from './agents/integrations/whatsapp'
+import { channels } from './agents/integrations/channels'
 
-const version = '2.0630.1258'
+const version = '2.0713.1426'
 
 const app = express()
 app.use(cors())
@@ -302,6 +303,37 @@ app.all('/integrations/whatsapp/:agent', async (req, res) => {
     await whatsapp.processHook({ agent: Number(agent), payload: body, debug: !!req.query.debug })
   } catch (error) {
     console.error(`Error Executing Whatsapp Integration ${error}`)
+  }
+
+})
+
+app.all('/channels/:channelId', async (req, res) => {
+
+  if (req.method === 'GET') {
+    const { 'hub.mode': mode, 'hub.challenge': challenge } = req.query
+    if (mode === 'subscribe') {
+      console.log('Channel Subscription Verified')
+      res.status(200).send(challenge)
+    } else {
+      res.status(403).end()
+    }
+    return
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).send("Method Not Allowed")
+    return
+  }
+
+  res.end()
+
+  const { channelId } = req.params
+  if (!channelId) return
+
+  try {
+    await channels.processChannel(channelId, req.body)
+  } catch (error) {
+    console.error(`Error Executing Channel Integration ${error}`)
   }
 
 })

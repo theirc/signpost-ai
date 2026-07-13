@@ -601,8 +601,9 @@ export function createAgent(config: AgentConfig) {
         const { data: items, error: itemsError } = await supabase.from("eval_items").select().in("id", agent.evalItems)
         if (itemsError) throw itemsError
         if (items.length === 0) return
-        const { data: messages, error: messageError } = await supabase.from("messages").select().eq("contact", contact.id).order("created_at", { ascending: true }).limit(10)
+        const { data: recent, error: messageError } = await supabase.from("messages").select().eq("contact", contact.id).order("created_at", { ascending: false }).limit(10)
         if (messageError) throw messageError
+        const messages = (recent || []).slice().reverse()
 
         const result = await evaluate({
           userMessage: message,
