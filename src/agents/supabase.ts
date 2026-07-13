@@ -225,6 +225,81 @@ export type Database = {
           },
         ]
       }
+      channels: {
+        Row: {
+          agent: number | null
+          answer_via_whatsapp: boolean | null
+          created_at: string
+          debounce_time: number | null
+          debounce_type: string | null
+          debug: boolean | null
+          evaluations: Json | null
+          id: string
+          language: string | null
+          team: string | null
+          telerivet_apikey: string | null
+          telerivet_projectid: string | null
+          telerivet_routeid: string | null
+          title: string | null
+          type: string | null
+          whatsapp_phoneid: string | null
+          whatsapp_token: string | null
+        }
+        Insert: {
+          agent?: number | null
+          answer_via_whatsapp?: boolean | null
+          created_at?: string
+          debounce_time?: number | null
+          debounce_type?: string | null
+          debug?: boolean | null
+          evaluations?: Json | null
+          id?: string
+          language?: string | null
+          team?: string | null
+          telerivet_apikey?: string | null
+          telerivet_projectid?: string | null
+          telerivet_routeid?: string | null
+          title?: string | null
+          type?: string | null
+          whatsapp_phoneid?: string | null
+          whatsapp_token?: string | null
+        }
+        Update: {
+          agent?: number | null
+          answer_via_whatsapp?: boolean | null
+          created_at?: string
+          debounce_time?: number | null
+          debounce_type?: string | null
+          debug?: boolean | null
+          evaluations?: Json | null
+          id?: string
+          language?: string | null
+          team?: string | null
+          telerivet_apikey?: string | null
+          telerivet_projectid?: string | null
+          telerivet_routeid?: string | null
+          title?: string | null
+          type?: string | null
+          whatsapp_phoneid?: string | null
+          whatsapp_token?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channels_agent_fkey"
+            columns: ["agent"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channels_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_history: {
         Row: {
           agent_id: string | null

@@ -4,13 +4,15 @@ import { supabase } from "../../db"
 import { send } from "./send"
 import { sendTypingIndicator } from "./sendTypingIndicator"
 
-interface WhatsAppMediaMessage {
-  id: string
-  mime_type: string
-  sha256: string
-  caption?: string
-  filename?: string
-  voice?: boolean
+declare global {
+  interface WhatsAppMediaMessage {
+    id: string
+    mime_type: string
+    sha256: string
+    caption?: string
+    filename?: string
+    voice?: boolean
+  }
 }
 
 interface WhatsAppError {

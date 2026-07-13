@@ -171,5 +171,32 @@ declare global {
   }
 
 
+  interface Channel {
+    id?: string
+    title?: string
+    type?: "app" | "telerivet" | "whatsapp"
+    agent?: number
+
+    debounce_time?: number //in seconds
+    debounce_type?: "none" | "singleAgentInstance" | "debounce"
+
+    debug?: boolean
+    evaluations?: number[]
+    team?: string
+
+    telerivet_apikey?: string
+    telerivet_projectid?: string
+    telerivet_routeid?: string
+
+    whatsapp_phoneid?: string
+    whatsapp_token?: string
+
+    answer_via_whatsapp?: boolean
+
+    created_at?: string
+
+  }
+
+
 
 }
