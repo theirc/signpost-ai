@@ -43,6 +43,10 @@ async function execute(worker: TemplateWorker, p: AgentParameters) {
   }
   console.log("[template] values.flags:", values["flags"])
 
+  // Magic Form memory: {{form_memory}} (rendered note) + {{forms.<field>}} (structured).
+  if ((p as any).formMemory) values["form_memory"] = (p as any).formMemory
+  if ((p as any).formsContext) values["forms"] = (p as any).formsContext
+
   // Register Handlebars helpers
   Handlebars.registerHelper('includes', function (str, search) {
     if (typeof str !== 'string') return false

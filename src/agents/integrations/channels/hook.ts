@@ -1,6 +1,5 @@
 import { supabase } from "../../db"
-import { processWhatsapp } from "./whatsapp"
-import { processTelerivet } from "./telerivet"
+import { channelRegistry } from "./registry"
 
 export async function processChannel(channelId: string, payload: any) {
 
@@ -14,15 +13,12 @@ export async function processChannel(channelId: string, payload: any) {
 
   const channel = data as Channel
 
-  switch (channel.type) {
-    case "whatsapp":
-      await processWhatsapp(channel, payload)
-      break
-    case "telerivet":
-      await processTelerivet(channel, payload)
-      break
-    default:
-      console.error(`Unsupported channel type: ${channel.type}`)
+  const process = channelRegistry[channel.type]
+  if (!process) {
+    console.error(`Unsupported channel type: ${channel.type}`)
+    return
   }
+
+  await process(channel, payload)
 
 }

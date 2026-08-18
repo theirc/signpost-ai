@@ -44,6 +44,8 @@ async function execute(worker: StructuredOutputWorker, p: AgentParameters) {
 
   const handlers = worker.getUserHandlers()
   const input = worker.fields.input.value
+  worker.fields.JSON.value = {}
+  if (!input || input.length == 0) return
 
   const schemaFields: Record<string, z.ZodTypeAny> = {}
 

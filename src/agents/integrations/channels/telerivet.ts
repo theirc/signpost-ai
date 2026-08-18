@@ -4,6 +4,7 @@ import { agents } from "../../agent"
 import { supabase } from "../../db"
 import { whatsapp } from "../whatsapp"
 import { base64ToBytes, bytesToBase64 } from "./base64"
+import { splitBreaks } from "./breaks"
 import { cache, loadApiKeys } from "./cache"
 import { coordinate } from "./debounce"
 import { saveAndEvaluate } from "./conversation"
@@ -120,15 +121,17 @@ async function runTelerivet(channel: Channel, cached: CachedContact, input: Chan
   if (!response && media_urls.length == 0 && quickReplies.length == 0) {
     // No output to send
   } else if (channel.answer_via_whatsapp) {
-    await whatsapp.send({
-      token: channel.whatsapp_token,
-      phone: channel.whatsapp_phoneid,
-      to: to_number,
-      message: response,
-      files: media_urls,
-      quickReplies,
-      message_id: input.message_id,
-    })
+    for (const chunk of splitBreaks({ response, files: media_urls, quickReplies })) {
+      await whatsapp.send({
+        token: channel.whatsapp_token,
+        phone: channel.whatsapp_phoneid,
+        to: to_number,
+        message: chunk.response,
+        files: chunk.files,
+        quickReplies: chunk.quickReplies,
+        message_id: input.message_id,
+      })
+    }
   } else {
 
     // Extract all image URLs from response (both markdown and plain URLs)

@@ -6,6 +6,7 @@ import { sendImageMessage } from "./sendImageMessage"
 import { sendVideoMessage } from "./sendVideoMessage"
 import { sendInteractiveListMessage } from "./sendInteractiveListMessage"
 import { sendInteractiveReplyButtonsMessage } from "./sendInteractiveReplyButtonsMessage"
+import { sendTemplate } from "./sendTemplate"
 import { processHook } from "./hook"
 import { send } from "./send"
 
@@ -19,5 +20,6 @@ export const whatsapp = {
   sendVideoMessage,
   sendInteractiveListMessage,
   sendInteractiveReplyButtonsMessage,
+  sendTemplate,
   processHook,
 }

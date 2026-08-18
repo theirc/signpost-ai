@@ -3,6 +3,7 @@ import { agents } from "../../agent"
 import { whatsapp } from "../whatsapp"
 import { baseUrl } from "../whatsapp/config"
 import { bytesToBase64 } from "./base64"
+import { splitBreaks } from "./breaks"
 import { cache, loadApiKeys } from "./cache"
 import { coordinate } from "./debounce"
 import { saveAndEvaluate } from "./conversation"
@@ -117,15 +118,17 @@ async function runWhatsapp(channel: Channel, cached: CachedContact, input: Chann
   const media_urls: string[] = p.output?.files || []
   const quickReplies: string[] = p.output?.quickreplies || []
 
-  await whatsapp.send({
-    token: channel.whatsapp_token,
-    phone: channel.whatsapp_phoneid,
-    to: input.from,
-    message: response,
-    files: media_urls,
-    quickReplies,
-    message_id: input.message_id,
-  })
+  for (const chunk of splitBreaks({ response, files: media_urls, quickReplies })) {
+    await whatsapp.send({
+      token: channel.whatsapp_token,
+      phone: channel.whatsapp_phoneid,
+      to: input.from,
+      message: chunk.response,
+      files: chunk.files,
+      quickReplies: chunk.quickReplies,
+      message_id: input.message_id,
+    })
+  }
 
   // Persist + evaluate AFTER answering, fire-and-forget so the agent is free to keep going (single-instance lock already released).
   saveAndEvaluate({ agent: a, contact: cached.contact, message: input.content, response, apiKeys, integration: { type: "whatsapp", message_id: input.message_id }, type: "whatsapp", team: channel.team }).catch(err => console.error("[channels] saveAndEvaluate error", err))

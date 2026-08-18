@@ -101,6 +101,54 @@ export type Database = {
           },
         ]
       }
+      agents_changelog: {
+        Row: {
+          agent: number | null
+          author: string | null
+          changes: Json | null
+          created_at: string
+          document: string | null
+          id: string
+          team: string | null
+          title: string | null
+        }
+        Insert: {
+          agent?: number | null
+          author?: string | null
+          changes?: Json | null
+          created_at?: string
+          document?: string | null
+          id?: string
+          team?: string | null
+          title?: string | null
+        }
+        Update: {
+          agent?: number | null
+          author?: string | null
+          changes?: Json | null
+          created_at?: string
+          document?: string | null
+          id?: string
+          team?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agents_changelog_agent_fkey"
+            columns: ["agent"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agents_changelog_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_keys: {
         Row: {
           created_at: string
@@ -235,7 +283,7 @@ export type Database = {
           debug: boolean | null
           evaluations: Json | null
           id: string
-          language: string | null
+          settings: Json | null
           team: string | null
           telerivet_apikey: string | null
           telerivet_projectid: string | null
@@ -254,7 +302,7 @@ export type Database = {
           debug?: boolean | null
           evaluations?: Json | null
           id?: string
-          language?: string | null
+          settings?: Json | null
           team?: string | null
           telerivet_apikey?: string | null
           telerivet_projectid?: string | null
@@ -273,7 +321,7 @@ export type Database = {
           debug?: boolean | null
           evaluations?: Json | null
           id?: string
-          language?: string | null
+          settings?: Json | null
           team?: string | null
           telerivet_apikey?: string | null
           telerivet_projectid?: string | null
@@ -776,6 +824,141 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "events_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_record_events: {
+        Row: {
+          actor: string | null
+          confidence: number | null
+          created_at: string
+          field: string
+          id: string
+          message: string | null
+          new_value: Json | null
+          note: string | null
+          old_value: Json | null
+          record: string
+          source: Database["public"]["Enums"]["form_event_source"]
+          team: string | null
+        }
+        Insert: {
+          actor?: string | null
+          confidence?: number | null
+          created_at?: string
+          field: string
+          id?: string
+          message?: string | null
+          new_value?: Json | null
+          note?: string | null
+          old_value?: Json | null
+          record: string
+          source: Database["public"]["Enums"]["form_event_source"]
+          team?: string | null
+        }
+        Update: {
+          actor?: string | null
+          confidence?: number | null
+          created_at?: string
+          field?: string
+          id?: string
+          message?: string | null
+          new_value?: Json | null
+          note?: string | null
+          old_value?: Json | null
+          record?: string
+          source?: Database["public"]["Enums"]["form_event_source"]
+          team?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_record_events_message_fkey"
+            columns: ["message"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_record_events_record_fkey"
+            columns: ["record"]
+            isOneToOne: false
+            referencedRelation: "form_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_record_events_team_fkey"
+            columns: ["team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_records: {
+        Row: {
+          agent: number | null
+          contact: string
+          created_at: string
+          field_meta: Json
+          form: string
+          id: string
+          team: string | null
+          updated_at: string
+          values: Json
+          version: number
+        }
+        Insert: {
+          agent?: number | null
+          contact: string
+          created_at?: string
+          field_meta?: Json
+          form: string
+          id?: string
+          team?: string | null
+          updated_at?: string
+          values?: Json
+          version?: number
+        }
+        Update: {
+          agent?: number | null
+          contact?: string
+          created_at?: string
+          field_meta?: Json
+          form?: string
+          id?: string
+          team?: string | null
+          updated_at?: string
+          values?: Json
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_records_agent_fkey"
+            columns: ["agent"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_records_contact_fkey"
+            columns: ["contact"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_records_form_fkey"
+            columns: ["form"]
+            isOneToOne: false
+            referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_records_team_fkey"
             columns: ["team"]
             isOneToOne: false
             referencedRelation: "teams"
@@ -2042,6 +2225,7 @@ export type Database = {
     }
     Enums: {
       agent_types: "conversational" | "data"
+      form_event_source: "agent" | "human" | "import"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2173,6 +2357,7 @@ export const Constants = {
   public: {
     Enums: {
       agent_types: ["conversational", "data"],
+      form_event_source: ["agent", "human", "import"],
     },
   },
 } as const
