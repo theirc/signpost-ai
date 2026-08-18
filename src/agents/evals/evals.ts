@@ -3,6 +3,9 @@ import { z } from "zod"
 import { createOpenAI } from "@ai-sdk/openai"
 import { generateText } from "ai"
 
+// Model used to evaluate an interaction. Shared so the form filler can default to the same one.
+export const EVAL_MODEL = "gpt-5.4-nano"
+
 // --- Zod Schema ---
 
 const EvaluationSchema = z.object({
@@ -175,7 +178,7 @@ Evaluate this interaction based on the catalog and contact profile above.`
   let object: any
   try {
     const result = await generateObject({
-      model: openai("gpt-5.4-nano"),
+      model: openai(EVAL_MODEL),
       schema: EvaluationSchema,
       schemaName: "ConversationEvaluation",
       schemaDescription: "Evaluation of a single interaction in a humanitarian support conversation",
