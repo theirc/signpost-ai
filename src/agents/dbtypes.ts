@@ -44,13 +44,6 @@ declare global {
   type MessageRoles = 'user' | 'assistant' | "human" | "synthetic"
   type ContactTypes = "user" | "operator" | "synthetic" | "ai"
 
-  interface EvaluationContactPayload {
-    count?: number
-    lastSeverity?: number
-    firstSeen?: string
-    lastSeen?: string
-  }
-
   interface Contact {
     id?: string
     name?: string
@@ -67,9 +60,15 @@ declare global {
     no_reply_needed?: boolean
     internal_comments?: MessageComment[]
     hitl?: boolean
+    hitled?: boolean
 
     evaluation?: {
-      [index: string]: EvaluationContactPayload
+      [index: string]: {
+        count?: number
+        lastSeverity?: number
+        firstSeen?: string
+        lastSeen?: string
+      }
     }
 
     // ------ Local Usage -------------
@@ -240,6 +239,16 @@ declare global {
 
   }
 
-
+  // Maps a Meta business asset (facebook page, instagram account or whatsapp phone number id) to the
+  // channel that answers it, so every tenant can share a single webhook url. asset_id is unique across
+  // the whole table: the payload carries no tenant, so a duplicate would make routing ambiguous.
+  interface Router {
+    id?: string
+    title?: string
+    asset_id?: string
+    channel?: string
+    team?: string
+    created_at?: string
+  }
 
 }

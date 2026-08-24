@@ -141,6 +141,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "agents_changelog_author_fkey"
+            columns: ["author"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agents_changelog_author_fkey"
+            columns: ["author"]
+            isOneToOne: false
+            referencedRelation: "users_with_teams"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "agents_changelog_team_fkey"
             columns: ["team"]
             isOneToOne: false
@@ -462,6 +476,7 @@ export type Database = {
           evaluation: Json | null
           extractions: Json
           hitl: boolean | null
+          hitled: boolean | null
           id: string
           internal_comments: Json | null
           lasteval: string | null
@@ -481,6 +496,7 @@ export type Database = {
           evaluation?: Json | null
           extractions?: Json
           hitl?: boolean | null
+          hitled?: boolean | null
           id: string
           internal_comments?: Json | null
           lasteval?: string | null
@@ -500,6 +516,7 @@ export type Database = {
           evaluation?: Json | null
           extractions?: Json
           hitl?: boolean | null
+          hitled?: boolean | null
           id?: string
           internal_comments?: Json | null
           lasteval?: string | null
@@ -1516,6 +1533,51 @@ export type Database = {
           {
             foreignKeyName: "roles_team_id_fkey"
             columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      routers: {
+        Row: {
+          asset_id: string | null
+          channel: string | null
+          created_at: string | null
+          id: string
+          team: string | null
+          title: string | null
+          type: string | null
+        }
+        Insert: {
+          asset_id?: string | null
+          channel?: string | null
+          created_at?: string | null
+          id?: string
+          team?: string | null
+          title?: string | null
+          type?: string | null
+        }
+        Update: {
+          asset_id?: string | null
+          channel?: string | null
+          created_at?: string | null
+          id?: string
+          team?: string | null
+          title?: string | null
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routers_channel_fkey"
+            columns: ["channel"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routers_team_fkey"
+            columns: ["team"]
             isOneToOne: false
             referencedRelation: "teams"
             referencedColumns: ["id"]

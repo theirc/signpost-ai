@@ -111,7 +111,8 @@ export function buildMetaAdapter(type: MetaChannelType): ChannelAdapter<Messenge
 
 // Meta batches events: take the first inbound message or postback and skip everything else.
 // Echoes are the page's own outgoing messages, so processing them would make the agent answer itself.
-function firstMessage(payload: MessengerWebhookPayload): MessengerEvent | null {
+// Exported because router.ts uses it to drop non message events before they reach the database.
+export function firstMessage(payload: MessengerWebhookPayload): MessengerEvent | null {
   for (const entry of payload?.entry || []) {
     for (const event of entry.messaging || []) {
       if (event.delivery || event.read || event.reaction) continue

@@ -307,6 +307,7 @@ export function createAgent(config: AgentConfig) {
         if (contact?.id) {
           p.integration.contact = contact.id
           p.uid ||= contact.id
+          p.hitled ||= contact.hitled
         }
       } else if (p.debug && p.integration?.contact) {
         // In debug mode without a codec key, upsert a simulated contact so it stays
@@ -432,10 +433,10 @@ export function createAgent(config: AgentConfig) {
         try {
           const liveForms = await loadFormSummaries(agent.forms, memoryContactId)
           if (liveForms.length) {
-            ;(p as any).formMemory = renderFormMemory(liveForms)
+            ; (p as any).formMemory = renderFormMemory(liveForms)
             const flatValues: Record<string, any> = {}
             for (const s of liveForms) Object.assign(flatValues, s.values)
-            ;(p as any).formsContext = flatValues
+              ; (p as any).formsContext = flatValues
           }
         } catch (err) {
           console.warn("[formMemory] failed to load bound forms:", err)
@@ -560,10 +561,10 @@ export function createAgent(config: AgentConfig) {
 
           if (hasUid && summaries.length) {
             p.state.agent ||= {}
-            ;(p.state.agent as any).forms = summaries.map((s: FilledFormSummary) => ({
-              formId: s.formId, title: s.title, values: s.values,
-              fields: s.fields, version: s.version,
-            }))
+              ; (p.state.agent as any).forms = summaries.map((s: FilledFormSummary) => ({
+                formId: s.formId, title: s.title, values: s.values,
+                fields: s.fields, version: s.version,
+              }))
             await supabase.from("states").upsert({ id: p.uid, state: p.state || {} })
           }
         } catch (err) {
