@@ -67,6 +67,7 @@ declare global {
     apiKeys?: APIKeys
     team?: string
     session?: string
+    hitled?: boolean
     integration?: IntegrationPayload
     state?: AgentState
     logWriter?: (p: { worker: AIWorker, state: any }) => void

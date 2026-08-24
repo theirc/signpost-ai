@@ -11,10 +11,16 @@ import { telerivetHook, type TelerivetHookRequest } from './integrations/teleriv
 import { whatsapp } from './agents/integrations/whatsapp'
 import { channels } from './agents/integrations/channels'
 
-const version = '2.0818.1120'
+const version = '2.0824.1525'
 
 const app = express()
 app.use(cors())
+
+// Meta signs its webhooks with an hmac over the EXACT bytes it sent, so /router needs the raw body kept
+// aside. This has to stay ABOVE the global express.json(): body-parser flags the request as parsed and
+// any later parser skips itself, which would leave rawBody undefined and fail every signature check.
+app.use('/router', express.json({ verify: (req, _res, buf) => { (req as any).rawBody = buf } }))
+
 app.use(express.urlencoded({ extended: true }))
 app.use(express.json())
 app.use(morgan("tiny"))
@@ -338,6 +344,48 @@ app.all('/channels/:channelId', async (req, res) => {
 
 })
 
+
+
+
+// One shared Meta App means one callback url for Messenger, Instagram and Whatsapp of every tenant, and a
+// payload that carries no channel id. processRouter resolves the channel by business asset id instead, so
+// this endpoint is transport only: verify the signature, answer immediately and hand the payload over.
+// META_APP_SECRET and META_VERIFY_TOKEN come from env, so the body is verified BEFORE it is trusted.
+
+// Subscription handshake. Meta calls it once, when the callback url is saved in the app dashboard.
+app.get('/router', (req, res) => {
+
+  const challenge = channels.verifyChallenge(req.query, process.env.META_VERIFY_TOKEN)
+  if (!challenge) {
+    res.status(403).end()
+    return
+  }
+
+  res.type("text/plain").send(challenge)
+
+})
+
+app.post('/router', async (req, res) => {
+
+  const ok = await channels.verifySignature((req as any).rawBody, req.get("x-hub-signature-256"), process.env.META_APP_SECRET)
+  if (!ok) {
+    res.status(403).end()
+    return
+  }
+
+  // Answer first. Meta retries anything slower than a few seconds and disables the subscription after
+  // repeated failures, which would take down every channel at once, so the work continues after the
+  // response is already sent. An unregistered asset is not an error for the caller either: processRouter
+  // logs it and returns, the 200 already went out.
+  res.end()
+
+  try {
+    await channels.processRouter(req.body)
+  } catch (error) {
+    console.error(`Error Executing Router Integration ${error}`)
+  }
+
+})
 
 app.listen(3000, () => {
   console.log(`Server version ${version} running on port ${3000}`)
