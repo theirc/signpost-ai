@@ -83,11 +83,11 @@ async function execute(worker: OnboardWorker, p: AgentParameters) {
 
   let input: string = worker.fields.input.value || ""
 
-  if (parameters.disableOnHITL) {
-    worker.fields.output.value = worker.fields.input.value
-    worker.fields.finished.value = true
-    return
-  }
+  // if (parameters.disableOnHITL) {
+  //   worker.fields.output.value = worker.fields.input.value
+  //   worker.fields.finished.value = true
+  //   return
+  // }
 
   worker.fields.output.value = ""
   input = input.trim().toLowerCase()
