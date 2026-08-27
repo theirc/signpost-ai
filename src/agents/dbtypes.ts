@@ -44,13 +44,6 @@ declare global {
   type MessageRoles = 'user' | 'assistant' | "human" | "synthetic"
   type ContactTypes = "user" | "operator" | "synthetic" | "ai"
 
-  interface EvaluationContactPayload {
-    count?: number
-    lastSeverity?: number
-    firstSeen?: string
-    lastSeen?: string
-  }
-
   interface Contact {
     id?: string
     name?: string
@@ -67,9 +60,15 @@ declare global {
     no_reply_needed?: boolean
     internal_comments?: MessageComment[]
     hitl?: boolean
+    hitled?: boolean
 
     evaluation?: {
-      [index: string]: EvaluationContactPayload
+      [index: string]: {
+        count?: number
+        lastSeverity?: number
+        firstSeen?: string
+        lastSeen?: string
+      }
     }
 
     // ------ Local Usage -------------
@@ -156,6 +155,100 @@ declare global {
     askhuman?: boolean | null
   }
 
+  interface Form {
+    id?: string
+    title: string
+    fields?: FormFieldDef[]
+    team?: string
+    created_at?: string
+  }
 
+  type FormCondingOperator =
+    | "equals" | "notEquals" | "contains" | "notContains"
+    | "gt" | "lt" | "gte" | "lte" | "isEmpty" | "isNotEmpty"
+
+  interface FormFieldCondition {
+    field: string
+    operator: FormCondingOperator
+    value?: string | number | boolean
+  }
+
+  interface FormFieldDef {
+    title: string
+    name: string,
+    required?: boolean
+    type: "string" | "number" | "boolean" | "date" | "list" | "multiselect" | "group"
+    list?: { label: string, value: string }[]
+    subfields?: FormFieldDef[]
+
+    extraction?: {
+      enabled: boolean
+      method?: "ai" | "keyword"
+      instruction: string
+      minConfidence?: number
+      // Once a human has edited the field, never let the agent overwrite it.
+      lockAfterHuman?: boolean
+      keywords?: string[]
+      keywordMatch?: "any" | "all" | "phrase"
+      keywordValue?: string
+    }
+
+    visibleWhen?: FormFieldCondition[]
+
+    calculated?: {
+      formula: string
+    }
+  }
+
+
+  // Per provider credentials for channels added after the whatsapp_* / telerivet_* columns.
+  interface ChannelSettings {
+    //Messenger and Instagram, both answered through the linked Facebook Page
+    page_id?: string
+    page_token?: string
+
+    //Telegram
+    bot_token?: string
+  }
+
+  interface Channel {
+    id?: string
+    title?: string
+    type?: "app" | "telerivet" | "whatsapp" | "messenger" | "instagram" | "telegram"
+    agent?: number
+
+    debounce_time?: number //in seconds
+    debounce_type?: "none" | "singleAgentInstance" | "debounce"
+
+    debug?: boolean
+    evaluations?: number[]
+    team?: string
+
+    telerivet_apikey?: string
+    telerivet_projectid?: string
+    telerivet_routeid?: string
+
+    whatsapp_phoneid?: string
+    whatsapp_token?: string
+
+    answer_via_whatsapp?: boolean
+
+    settings?: ChannelSettings
+
+    created_at?: string
+
+  }
+
+  // Maps a Meta business asset (facebook page, instagram account or whatsapp phone number id) to the
+  // channel that answers it, so every tenant can share a single webhook url. asset_id is unique across
+  // the whole table: the payload carries no tenant, so a duplicate would make routing ambiguous.
+  interface Router {
+    id?: string
+    title?: string
+    asset_id?: string
+    channel?: string
+    team?: string
+    created_at?: string
+  }
 
 }

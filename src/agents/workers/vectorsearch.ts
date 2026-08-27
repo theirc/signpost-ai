@@ -37,7 +37,7 @@ declare global {
     locale?: string
     lat?: number
     lon?: number
-    origin?: "supabase" | "exa" | "weaviate" | "jina" | "databricks" | "youtube" | "zendesk" | "rescuenet" | "services"
+    origin?: "supabase" | "exa" | "weaviate" | "jina" | "databricks" | "youtube" | "zendesk" | "rescuenet" | "services" | "box"
   }
 }
 
@@ -62,6 +62,13 @@ async function execute(worker: VectorSearchWorker, { apiKeys, team }: AgentParam
   const query = worker.fields.input.value || ""
 
   if (!query) {
+    // When wired as a tool, the query arrives via the tool call — not via the
+    // input edge. The flow traversal will run this node with no query before
+    // the LLM has a chance to call the tool, so silently skip rather than error.
+    const isToolOnly = !Object.values(worker.handles || {}).some(
+      h => h.name === "input" && h.direction === "input" && (h.value ?? h.default)
+    )
+    if (isToolOnly) return
     worker.error = "Vector Search worker: No query provided."
     return
   }
@@ -130,8 +137,11 @@ async function execute(worker: VectorSearchWorker, { apiKeys, team }: AgentParam
 
 
 function getTool(w: SearchWorker, p: AgentParameters): ToolConfig {
+  const toolName = (w.parameters?.toolDescription || "search")
+    .trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 64) || "search"
 
   const tool: ToolConfig = {
+    name: toolName,
     description: w.parameters?.toolDescription,
     parameters: z.object({
       query: z.string().describe("The search query to execute."),
@@ -140,7 +150,8 @@ function getTool(w: SearchWorker, p: AgentParameters): ToolConfig {
     async execute(args, ctx) {
       const { query } = args
       w.fields.input.value = query
-      await w.execute(p)
+      w.executed = true
+      await vectorSearch.execute(w as any, p)
       const results = w.fields.output.value as VectorDocument[] || []
       const mddocs = convertDocumentsToMarkdown(results)
       ctx['searchResults'] = mddocs

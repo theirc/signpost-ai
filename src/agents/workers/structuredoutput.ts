@@ -44,28 +44,30 @@ async function execute(worker: StructuredOutputWorker, p: AgentParameters) {
 
   const handlers = worker.getUserHandlers()
   const input = worker.fields.input.value
+  worker.fields.JSON.value = {}
+  if (!input || input.length == 0) return
 
   const schemaFields: Record<string, z.ZodTypeAny> = {}
 
   for (let s of handlers) {
     let fieldSchema: z.ZodTypeAny
     if (s.type == "boolean") {
-      fieldSchema = z.boolean().nullable().default(null)
+      fieldSchema = z.boolean().nullable()
     } else if (s.type == "number") {
-      fieldSchema = z.number().nullable().default(null)
+      fieldSchema = z.number().nullable()
     } else if (s.type == "string") {
-      fieldSchema = z.string().nullable().default(null)
+      fieldSchema = z.string().nullable()
     } else if (s.type == "string[]") {
-      fieldSchema = z.array(z.string()).nullable().default(null)
+      fieldSchema = z.array(z.string()).nullable()
     } else if (s.type == "number[]") {
-      fieldSchema = z.array(z.number()).nullable().default(null)
+      fieldSchema = z.array(z.number()).nullable()
     } else if (s.type == "enum" && s.enum && s.enum.length > 0) {
-      fieldSchema = z.enum(s.enum as [string, ...string[]]).nullable().default(null)
+      fieldSchema = z.enum(s.enum as [string, ...string[]]).nullable()
     } else {
-      fieldSchema = z.any().nullable().default(null)
+      fieldSchema = z.any().nullable()
     }
 
-    schemaFields[s.name] = fieldSchema.optional().describe(s.prompt || "")
+    schemaFields[s.name] = fieldSchema.describe(s.prompt || "")
   }
 
   const schema = z.object(schemaFields)

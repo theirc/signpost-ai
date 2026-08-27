@@ -243,8 +243,8 @@ export function buildWorker(w: WorkerConfig) {
       if (type === "string" || type === "enum") {
         value ||= ""
         conditionValue1 ||= ""
-        if (typeof value !== "string") value = String(value)
-        if (typeof conditionValue1 !== "string") conditionValue1 = String(conditionValue1)
+        if (typeof value !== "string") value = `${value}`
+        if (typeof conditionValue1 !== "string") conditionValue1 = `${conditionValue1}`
 
         if (operator === "equals") return conditionValue1 == value
         if (operator === "notEquals") return conditionValue1 != value
@@ -262,12 +262,12 @@ export function buildWorker(w: WorkerConfig) {
       }
 
       if (type === "number") {
-        if (typeof value !== "number") value = Number(value)
-        if (typeof conditionValue1 !== "number") conditionValue1 = Number(conditionValue1)
-        if (conditionValue2 && typeof conditionValue2 !== "number") conditionValue2 = Number(conditionValue2)
-        if (value) value = 0
-        if (conditionValue1) conditionValue1 = 0
-        if (conditionValue2) conditionValue2 = 0
+        if (typeof value !== "number") value = Number(value) || 0
+        if (typeof conditionValue1 !== "number") conditionValue1 = Number(conditionValue1) || 0
+        if (conditionValue2 && typeof conditionValue2 !== "number") conditionValue2 = Number(conditionValue2) || 0
+        if (!value) value = 0
+        if (!conditionValue1) conditionValue1 = 0
+        if (!conditionValue2) conditionValue2 = 0
         if (operator === "equals") return conditionValue1 == value
         if (operator === "notEquals") return conditionValue1 != value
         if (operator === "gt") return value > conditionValue1

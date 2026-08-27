@@ -8,11 +8,19 @@ import { supabase } from './agents/db'
 import { executeCronJobs } from './cron'
 import Exa from 'exa-js'
 import { telerivetHook, type TelerivetHookRequest } from './integrations/telerivet'
+import { whatsapp } from './agents/integrations/whatsapp'
+import { channels } from './agents/integrations/channels'
 
-const version = '2.0608.1525'
+const version = '2.0826.1124'
 
 const app = express()
 app.use(cors())
+
+// Meta signs its webhooks with an hmac over the EXACT bytes it sent, so /router needs the raw body kept
+// aside. This has to stay ABOVE the global express.json(): body-parser flags the request as parsed and
+// any later parser skips itself, which would leave rawBody undefined and fail every signature check.
+app.use('/router', express.json({ verify: (req, _res, buf) => { (req as any).rawBody = buf } }))
+
 app.use(express.urlencoded({ extended: true }))
 app.use(express.json())
 app.use(morgan("tiny"))
@@ -79,7 +87,6 @@ app.post('/agent', async (req: Request<any, any, AgentParameters & { id: number,
     res.status(500).send(er)
   }
 })
-
 
 app.post('/decors', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -205,8 +212,6 @@ app.use('/decorsify/', async (req: Request, res: Response): Promise<void> => {
   }
 })
 
-
-
 app.post('/cron', async (req, res) => {
 
   try {
@@ -252,27 +257,135 @@ app.post('/exa', async (req, res) => {
 })
 
 
-app.post('/integrations/:provider/:agent', async (req, res) => {
-  const { provider, agent } = req.params
-  const body: TelerivetHookRequest = req.body
+app.post('/integrations/telerivet/:agent', async (req, res) => {
   res.end()
 
-  if (!provider || !agent || !body) return
+  // https://signpost-ia-app-qa.azurewebsites.net/integrations/telerivet/513?debug=1
+
+  const { agent } = req.params
+  const body: TelerivetHookRequest = req.body
+  if (!agent || !body) return
 
   body.integration = {}
   body.integration.useDebug = !!req.query.debug
   body.integration.route_id = req.query.route_id as string || null
 
   try {
-    if (provider === "telerivet") {
-      await telerivetHook(body, Number(agent), body.integration.route_id)
-    }
+    await telerivetHook(body, Number(agent), body.integration.route_id)
   } catch (error) {
     console.error(`Error Executing Telerivet Integration ${error}`)
   }
 
 })
 
+app.all('/integrations/whatsapp/:agent', async (req, res) => {
+
+  //https://nbdbrtkf-3000.brs.devtunnels.ms/integrations/whatsapp/513
+
+  if (req.method === 'GET') {
+    const { 'hub.mode': mode, 'hub.challenge': challenge, 'hub.verify_token': token } = req.query
+    if (mode === 'subscribe') {
+      console.log('Whatsapp Subscription Verified')
+      res.status(200).send(challenge)
+    } else {
+      res.status(403).end()
+    }
+    return
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).send("Method Not Allowed")
+    return
+  }
+
+  res.end()
+
+  const { agent } = req.params
+  const body = req.body
+
+  if (!agent || !body) return
+
+  try {
+    await whatsapp.processHook({ agent: Number(agent), payload: body, debug: !!req.query.debug })
+  } catch (error) {
+    console.error(`Error Executing Whatsapp Integration ${error}`)
+  }
+
+})
+
+app.all('/channels/:channelId', async (req, res) => {
+
+  if (req.method === 'GET') {
+    const { 'hub.mode': mode, 'hub.challenge': challenge } = req.query
+    if (mode === 'subscribe') {
+      console.log('Channel Subscription Verified')
+      res.status(200).send(challenge)
+    } else {
+      res.status(403).end()
+    }
+    return
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).send("Method Not Allowed")
+    return
+  }
+
+  res.end()
+
+  const { channelId } = req.params
+  if (!channelId) return
+
+  try {
+    await channels.processChannel(channelId, req.body)
+  } catch (error) {
+    console.error(`Error Executing Channel Integration ${error}`)
+  }
+
+})
+
+
+
+
+// One shared Meta App means one callback url for Messenger, Instagram and Whatsapp of every tenant, and a
+// payload that carries no channel id. processRouter resolves the channel by business asset id instead, so
+// this endpoint is transport only: verify the signature, answer immediately and hand the payload over.
+// META_APP_SECRET and META_VERIFY_TOKEN come from env, so the body is verified BEFORE it is trusted.
+
+// Subscription handshake. Meta calls it once, when the callback url is saved in the app dashboard.
+app.get('/router', (req, res) => {
+
+  const challenge = channels.verifyChallenge(req.query, process.env.META_VERIFY_TOKEN)
+  if (!challenge) {
+    res.status(403).end()
+    return
+  }
+
+  res.type("text/plain").send(challenge)
+
+})
+
+app.post('/router', async (req, res) => {
+
+  const ok = await channels.verifySignature((req as any).rawBody, req.get("x-hub-signature-256"), process.env.META_APP_SECRET)
+  if (!ok) {
+    res.status(403).end()
+    return
+  }
+
+  // Answer first. Meta retries anything slower than a few seconds and disables the subscription after
+  // repeated failures, which would take down every channel at once, so the work continues after the
+  // response is already sent. An unregistered asset is not an error for the caller either: processRouter
+  // logs it and returns, the 200 already went out.
+  res.end()
+
+  try {
+    await channels.processRouter(req.body)
+  } catch (error) {
+    console.error(`Error Executing Router Integration ${error}`)
+  }
+
+})
 
 app.listen(3000, () => {
   console.log(`Server version ${version} running on port ${3000}`)

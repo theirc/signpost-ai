@@ -59,7 +59,8 @@ function create(agent: Agent) {
 }
 
 
-async function execute(worker: BotWorker, { apiKeys }: AgentParameters) {
+async function execute(worker: BotWorker, p: AgentParameters) {
+  const { apiKeys } = p
 
   let model: any = null
   const paramModel = worker.parameters.model || ""

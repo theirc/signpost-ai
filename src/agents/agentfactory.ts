@@ -8,7 +8,8 @@ import { evaluate, updateContact } from "./evals/evals"
 import { generateObject } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
 import { z } from "zod"
-import { whatsapp } from "./integrations/whatsapp"
+import { generateChangeDocument } from "./changelog"
+import { runFormFiller, renderFormMemory, loadFormSummaries, FilledFormSummary } from "./forms/formfiller"
 
 type LogTypes = "execution" | "error" | "info" | "handoff" | "tool_start" | "tool_end"
 
@@ -22,11 +23,14 @@ interface AgentConfig {
   team_id?: string
   debuguuid?: string
   versions?: AgentVersion[]
+  evaluation?: string
   config?: {
     evalItems?: number[]
     escalation_flags?: AgentEscalationFlag[]
     summaryLanguage?: string
+    forms?: string[]
     integrations?: {
+      telerivet_answerViaWhatsapp?: boolean
       whatsapp_token?: string
       whatsapp_phoneid?: string
     }
@@ -89,6 +93,7 @@ export function createAgent(config: AgentConfig) {
     get title() { return config.title },
     set title(v: string) { config.title = v },
 
+    evaluation: null as string,
 
     get isConversational() {
       const input = agent.getInputWorker()
@@ -106,7 +111,9 @@ export function createAgent(config: AgentConfig) {
     workers,
     displayData: true,
     evalItems: [] as number[],
+    forms: [] as string[],
     integrations: {
+      telerivet_answerViaWhatsapp: false,
       whatsapp_token: null as string,
       whatsapp_phoneid: null as string,
     },
@@ -120,6 +127,8 @@ export function createAgent(config: AgentConfig) {
     description: "",
     currentWorker: null as AIWorker,
     versions: [] as AgentVersion[],
+    // Snapshot of the config as loaded (already hydrated), used to diff changes on save.
+    loadedConfig: null as AgentConfig | null,
     execution: null as string,
     toolCallNodes: [] as { name: string; arguments: string; result: string; sourceWorkerId: string }[],
 
@@ -298,12 +307,29 @@ export function createAgent(config: AgentConfig) {
         if (contact?.id) {
           p.integration.contact = contact.id
           p.uid ||= contact.id
+          p.hitled ||= contact.hitled
+        }
+      } else if (p.debug && p.integration?.contact) {
+        // In debug mode without a codec key, upsert a simulated contact so it stays
+        // out of the moderation panel (type "simulated" is excluded from that query).
+        const contactId = p.integration.contact
+        await supabase.from("contacts").upsert({
+          id: contactId,
+          type: "simulated",
+          team: p.team,
+          name: "Simulated User",
+        }, { onConflict: "id", ignoreDuplicates: false })
+        const { data: dbContact } = await supabase.from("contacts").select().eq("id", contactId).single()
+        if (dbContact) {
+          contact = dbContact as unknown as Contact
+          p.uid ||= contact.id
         }
       }
 
       // ───── Commands ───────────────────────────────────────────────────────
 
-      if (message && message.trim().toLowerCase() === "/reset") {
+      const cleanMessageForCommand = message?.trim().toLowerCase() || ""
+      if (cleanMessageForCommand === "/reset" || cleanMessageForCommand === "/إعادة تشغيل") {
         await agent.resetAgent(p.uid, contact?.id)
         p.output.response = "The chat history and state has been reset."
         p.commandExecuted = "reset"
@@ -340,7 +366,7 @@ export function createAgent(config: AgentConfig) {
       let userMessageId: string = null
 
       try {
-        if (contact && message && p.apiKeys?.codec && p.integration) {
+        if (contact && message && p.integration && (p.apiKeys?.codec || p.debug)) {
           const userMessage = await integrations.saveMessage({
             contact: contact.id,
             role: "user",
@@ -351,10 +377,70 @@ export function createAgent(config: AgentConfig) {
             integration: p.integration,
           })
           userMessageId = userMessage.id
+            // Expose to workers (e.g. AI worker's write_flags tool)
+            ; (p as any).userMessageId = userMessageId
         }
       } catch (error) {
         console.error('[Agent] Error saving user message:', error)
         throw error
+      }
+
+      // ───── Flags context (template hydration) ─────────────────────────
+      // Fetch historical flag state so templates can use {{flags.asked_human}} etc.
+      const flagsContactId = contact?.id
+      if (flagsContactId) {
+        try {
+          const { data: recentMsgs } = await supabase
+            .from("messages")
+            .select("highrisk, lowconf, askhuman, custom_message_flags")
+            .eq("contact", flagsContactId)
+            .order("created_at", { ascending: false })
+            .limit(30)
+
+          const msgs = (recentMsgs || []).slice().reverse() // oldest-first
+          let highrisk = 0, lowconf = 0, askhuman = 0
+          const customFlagState: Record<string, string> = {}
+          for (const m of msgs) {
+            if (m.highrisk != null) highrisk = m.highrisk as number
+            if (m.lowconf != null) lowconf = m.lowconf as number
+            if (m.askhuman != null) askhuman = m.askhuman as number
+            const custom = m.custom_message_flags as any[]
+            if (Array.isArray(custom)) {
+              for (const cf of custom) {
+                if (cf?.flagId) customFlagState[cf.flagId] = cf.status ?? "flagged"
+              }
+            }
+          }
+          const statusLabel = (v: number) => v === 1 ? "flagged" : v === 2 ? "resolved" : ""
+          const ctx = {
+            high_risk: statusLabel(highrisk),
+            low_confidence: statusLabel(lowconf),
+            asked_human: statusLabel(askhuman),
+            ...customFlagState,
+          }
+          console.log("[flagsContext] contact:", flagsContactId, ctx)
+            ; (p as any).flagsContext = ctx
+        } catch (err) {
+          console.warn("[flagsContext] failed to load flags:", err)
+        }
+      } else {
+        console.log("[flagsContext] skipped — no contact id (p.uid:", p.uid, ")")
+      }
+
+      // ───── Magic Form memory ───────────────────────────────────────────
+      const memoryContactId = contact?.id ?? p.integration?.contact
+      if (memoryContactId && agent.forms?.length) {
+        try {
+          const liveForms = await loadFormSummaries(agent.forms, memoryContactId)
+          if (liveForms.length) {
+            ; (p as any).formMemory = renderFormMemory(liveForms)
+            const flatValues: Record<string, any> = {}
+            for (const s of liveForms) Object.assign(flatValues, s.values)
+              ; (p as any).formsContext = flatValues
+          }
+        } catch (err) {
+          console.warn("[formMemory] failed to load bound forms:", err)
+        }
       }
 
       // ───── HITL ───────────────────────────────────────────────────────
@@ -426,18 +512,65 @@ export function createAgent(config: AgentConfig) {
 
       // ───── Evaluations ───────────────────────────────────────────────────────────
 
-      if (p.debug) {
-        await agent.updateEvaluations(contact, message, response, userMessageId, agentMessageId, p.apiKeys)
-      } else {
-        setTimeout(async () => {
-          await agent.updateEvaluations(contact, message, response, userMessageId, agentMessageId, p.apiKeys)
-        }, 1)
-      }
+      setTimeout(() => {
+        agent.updateEvaluations(contact, message, response, userMessageId, agentMessageId, p.apiKeys)
+      }, 1)
 
       // ───── Flags + evals (await in debug; otherwise p.evalPromise) ─────
 
-      const canRunFlags = !!(contact && userMessageId && message && response && agent.escalationFlags?.filter(f => f.enabled).length && p.apiKeys?.openai)
+      // Skip post-execution flag evaluation if the AI worker already wrote flags
+      // via the write_flags tool during generation — avoids double-writing.
+      const canRunFlags = !!(p as any).flagsWrittenByTool === false &&
+        !!(contact && userMessageId && message && response && agent.escalationFlags?.filter(f => f.enabled).length && p.apiKeys?.openai)
       const canRunEvals = !!(contact && message && response && agent.evalItems?.length && userMessageId && agentMessageId)
+
+      const formContactId = contact?.id ?? contactIdForMessage
+      const canRunFormFill = !!(formContactId && agent.forms?.length)
+
+      // Fill bound forms from the conversation. Runs after flags + evals and is
+      // never awaited on the send path, so it can't delay the message.
+      const runFormFill = async () => {
+        if (!canRunFormFill) return
+        try {
+          let transcript: { role: string; text: string }[] = []
+          const historyWorker = agent.getHistoryWorker?.()
+          if (historyWorker?.getTranscript) {
+            transcript = await historyWorker.getTranscript(p.uid || formContactId, `${agent.id}`)
+          }
+          if (!transcript.length) {
+            const { data: msgs } = await supabase
+              .from("messages")
+              .select("role, message, created_at")
+              .eq("contact", formContactId)
+              .order("created_at", { ascending: false })
+              .limit(200)
+            transcript = (msgs || [])
+              .reverse()
+              .map((m) => ({ role: m.role || "user", text: m.message || "" }))
+          }
+
+          const summaries = await runFormFiller({
+            apiKeys: p.apiKeys || {},
+            team: p.team,
+            agentId: agent.id,
+            contactId: formContactId,
+            formIds: agent.forms,
+            transcript,
+            triggeringMessageId: userMessageId,
+          })
+
+          if (hasUid && summaries.length) {
+            p.state.agent ||= {}
+              ; (p.state.agent as any).forms = summaries.map((s: FilledFormSummary) => ({
+                formId: s.formId, title: s.title, values: s.values,
+                fields: s.fields, version: s.version,
+              }))
+            await supabase.from("states").upsert({ id: p.uid, state: p.state || {} })
+          }
+        } catch (err) {
+          console.error("[Agent] formfiller error:", err)
+        }
+      }
 
       const runFlagsAndEvals = async () => {
         if (canRunFlags) {
@@ -487,20 +620,34 @@ export function createAgent(config: AgentConfig) {
               if (customFlags.length > 0) upd.custom_message_flags = customFlags
               const { error: flagErr } = await supabase.from("messages").update(upd as any).eq("id", userMessageId)
               if (flagErr) console.error('[Agent] Failed to write flag columns / custom_message_flags:', flagErr)
+
+              // Surface in the flow simulator so it's distinguishable from tool-based writes
+              const triggeredIds = [
+                ...Object.keys(builtinColUpdates).map(col => Object.entries({ highrisk: "high_risk", lowconf: "low_confidence", askhuman: "asked_human" }).find(([k]) => k === col)?.[1] ?? col),
+                ...customFlags.map(f => f.flagId),
+              ]
+              console.log("[Agent] Background eval wrote flags:", triggeredIds)
+              agent.toolCallNodes = [
+                ...(agent.toolCallNodes || []),
+                {
+                  name: "write_flags (background eval)",
+                  arguments: JSON.stringify({ flag_ids: triggeredIds }),
+                  result: JSON.stringify({ flagged: triggeredIds }),
+                  sourceWorkerId: "",
+                },
+              ]
             }
           } catch (err) {
             console.error('[Agent] Escalation flags error:', err)
           }
         }
 
+        // Form fill runs after flags so it sees their final state.
+        await runFormFill()
       }
 
-      if (canRunFlags || canRunEvals) {
-        if (p.debug) {
-          await runFlagsAndEvals()
-        } else {
-          p.evalPromise = runFlagsAndEvals()
-        }
+      if (canRunFlags || canRunEvals || canRunFormFill) {
+        p.evalPromise = runFlagsAndEvals()
       }
 
       // ───── End ───────────────────────────────────────────────────────
@@ -527,12 +674,26 @@ export function createAgent(config: AgentConfig) {
         const { data: items, error: itemsError } = await supabase.from("eval_items").select().in("id", agent.evalItems)
         if (itemsError) throw itemsError
         if (items.length === 0) return
-        const { data: messages, error: messageError } = await supabase.from("messages").select().eq("contact", contact.id).order("created_at", { ascending: true }).limit(10)
+        const { data: recent, error: messageError } = await supabase.from("messages").select().eq("contact", contact.id).order("created_at", { ascending: false }).limit(10)
         if (messageError) throw messageError
+        const messages = (recent || []).slice().reverse()
 
-        const result = await evaluate(message, response, messages as any, contact, items as any, apiKeys, agent.summaryLanguage)
+        const result = await evaluate({
+          userMessage: message,
+          agentResponse: response,
+          recentMessages: messages as any,
+          contact,
+          evalItems: items as any,
+          keys: apiKeys,
+          language: agent.summaryLanguage,
+          agentSummary: agent.evaluation,
+        })
 
         contact = updateContact(contact, result, items as any)
+
+        await supabase.from("agents").update({
+          evaluation: result.agentEvaluation.summary,
+        }).eq('id', agent.id)
 
         await supabase.from("messages").update({
           user_detected_items: result.detectedItems || null,
@@ -601,9 +762,14 @@ export function createAgent(config: AgentConfig) {
     },
 
     async resetAgent(uid: string, contactId?: string) {
-      await supabase.from("states").delete().eq("id", uid)
-      await supabase.from("history").delete().eq("uid", uid)
-      await supabase.from("events").delete().eq("id", uid)
+      const idsToDelete = []
+      if (uid) idsToDelete.push(uid)
+      if (contactId) idsToDelete.push(contactId)
+      if (idsToDelete.length > 0) {
+        await supabase.from("states").delete().in("id", idsToDelete)
+        await supabase.from("history").delete().in("uid", idsToDelete)
+        await supabase.from("events").delete().in("id", idsToDelete)
+      }
       if (contactId) {
         await supabase.from('contacts').update({
           evaluation: null,
@@ -628,10 +794,12 @@ export function configureAgent(data: AgentConfig) {
   agent.type = data.type || "data"
   agent.description = data.description || ""
   agent.versions = data.versions || []
+  agent.evaluation = data.evaluation
   agent.evalItems = data.config?.evalItems || []
   agent.summaryLanguage = data.config?.summaryLanguage
   agent.integrations = data.config?.integrations || {} as any
   agent.escalationFlags = data.config?.escalation_flags || []
+  agent.forms = data.config?.forms || []
 
   for (const w of workers) {
     const { handles, ...rest } = w
@@ -689,6 +857,7 @@ export function getAgentToSave(agent: Agent, team_id?: string) {
       evalItems: agent.evalItems || [],
       escalation_flags: agent.escalationFlags || [],
       summaryLanguage: agent.summaryLanguage || null,
+      forms: agent.forms || [],
       integrations: agent.integrations || {}
     }
   }
@@ -759,7 +928,7 @@ export function loadVersion(version: number, agent: Agent) {
 
 
 
-export async function saveAgent(agent: Agent, team_id?: string) {
+export async function saveAgent(agent: Agent, team_id?: string, author?: string) {
 
   const agentData = getAgentToSave(agent, team_id)
   agentData.versions = agent.versions
@@ -768,6 +937,10 @@ export async function saveAgent(agent: Agent, team_id?: string) {
   agentData.config.integrations ||= {}
   agentData.config.escalation_flags = agent.escalationFlags || []
 
+  // Governance change log: diff baseline vs current. Built before the agent write (reads the
+  // old baseline); persisted after it so the agent FK is set for newly created agents.
+  const changeLog = await buildChangeLog(agent, agentData, author)
+
   if (agent.id) {
     await supabase.from("agents").update(agentData as any).eq("id", agent.id)
   } else {
@@ -775,8 +948,53 @@ export async function saveAgent(agent: Agent, team_id?: string) {
     agent.id = data[0].id
   }
 
+  if (changeLog?.hasChanges) {
+    const changeLogRow = { agent: agent.id, team: team_id, author: author || null, title: changeLog.title, document: changeLog.document, changes: changeLog.changes }
+    await supabase.from("agents_changelog").insert(changeLogRow as any)
+  }
+
+  // Refresh the baseline so consecutive saves within the same session diff against the last save.
+  agent.loadedConfig = JSON.parse(JSON.stringify(agentData))
+
   return agent
 
+}
+
+async function buildChangeLog(agent: Agent, agentData: AgentConfig, author?: string) {
+  try {
+    const baseline = agent.loadedConfig
+
+    // Resolve evaluation item titles for the settings section (ids -> titles).
+    const baseItems = (baseline?.config?.evalItems || []).map(String)
+    const curItems = (agentData.config?.evalItems || []).map(String)
+    const changedItemIds = Array.from(new Set([...baseItems, ...curItems])).filter(
+      (id) => baseItems.includes(id) !== curItems.includes(id)
+    )
+    const evalItemTitles: Record<string, string> = {}
+    if (changedItemIds.length) {
+      const { data: items } = await supabase.from("eval_items").select("id, name").in("id", changedItemIds as any)
+      for (const it of items || []) evalItemTitles[String(it.id)] = (it as any).name
+    }
+
+    const date = new Date()
+    const result = generateChangeDocument(baseline as any, agentData as any, { author, evalItemTitles, date })
+    if (!result.hasChanges) return result
+
+    // Only when there are changes: resolve the author's name for display (avoids a roundtrip otherwise).
+    const displayName = await resolveAuthorName(author)
+    if (!displayName) return result
+    return generateChangeDocument(baseline as any, agentData as any, { author: displayName, evalItemTitles, date })
+  } catch (error) {
+    console.error("[agent-change-log] failed to build change log:", error)
+    return null
+  }
+}
+
+async function resolveAuthorName(userId?: string): Promise<string | null> {
+  if (!userId) return null
+  const { data } = await supabase.from("users").select("first_name, last_name").eq("id", userId).single()
+  const name = [data?.first_name, data?.last_name].filter(Boolean).join(" ").trim()
+  return name || null
 }
 
 export async function forkAgent(agent: Agent, team_id: string): Promise<Agent> {
@@ -1052,6 +1270,9 @@ export async function loadAgent(id: number, teamId: string): Promise<Agent | nul
       await w.loadAgent(teamId)
     }
   }
+
+  // Capture the hydrated config as the baseline for change-log diffing on next save.
+  agent.loadedConfig = JSON.parse(JSON.stringify(getAgentToSave(agent, teamId)))
 
   return agent
 }

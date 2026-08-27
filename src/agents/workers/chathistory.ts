@@ -19,8 +19,8 @@ declare global {
       output: NodeIO
     }
     saveHistory(worker: ChatHistoryWorker, p: AgentParameters, history: AgentInputItem[], searchContext?: string, inputTokens?: number, outputTokens?: number): Promise<void>
-    addMessageToHistory(uid: string, agent: string, team: string, role: 'user' | 'assistant' | "human", text: string): Promise<void>
-
+    addMessageToHistory(uid: string, agent: string, team: string, role: 'user' | 'assistant' | "human", text: string, workerId?: string): Promise<void>
+    getTranscript(uid: string, agentId: string): Promise<{ role: string; text: string }[]>
   }
 }
 
@@ -151,7 +151,7 @@ async function saveHistory(worker: ChatHistoryWorker, p: AgentParameters, histor
 
 }
 
-async function addMessageToHistory(uid: string, agent: string, team: string, role: 'user' | 'assistant' | "human", text: string): Promise<void> {
+async function addMessageToHistory(uid: string, agent: string, team: string, role: 'user' | 'assistant' | "human", text: string, workerId?: string): Promise<void> {
 
   if (!uid || !agent || !role || !text) return
 
@@ -160,6 +160,7 @@ async function addMessageToHistory(uid: string, agent: string, team: string, rol
   const newItemsToSave = {
     uid,
     agent,
+    worker: workerId || null,
     role,
     type: "message",
     team,
@@ -172,6 +173,23 @@ async function addMessageToHistory(uid: string, agent: string, team: string, rol
 }
 
 
+
+async function getTranscript(this: ChatHistoryWorker, uid: string, agentId: string): Promise<{ role: string; text: string }[]> {
+  if (!uid) return []
+  const { data, error } = await supabase.from("history").select("role, content, type")
+    .eq("uid", uid)
+    .eq("agent", `${agentId}`)
+    .eq("worker", this.id)
+    .order("id", { ascending: true })
+  if (error || !data) return []
+  return data
+    .map((h: any) => {
+      // Summary rows stored as role "system" are kept so extracted facts survive summarization.
+      const text = Array.isArray(h.content) ? (h.content[0]?.text ?? "") : ""
+      return { role: h.role || "user", text: String(text || "") }
+    })
+    .filter((m) => m.text.trim())
+}
 
 export const chatHistory: WorkerRegistryItem = {
   title: "Chat History",
@@ -198,6 +216,7 @@ export const chatHistory: WorkerRegistryItem = {
     ) as ChatHistoryWorker
     w.saveHistory = saveHistory
     w.addMessageToHistory = addMessageToHistory
+    w.getTranscript = getTranscript
     return w
   },
   get registry() { return chatHistory },

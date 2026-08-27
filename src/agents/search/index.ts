@@ -6,10 +6,11 @@ import { databricks } from "./databricks"
 import { searchYouTube } from "./youtube"
 import { zendesk } from "./zendesk"
 import { rescue } from "./rescue"
+import { searchBox } from "./box"
 
 declare global {
 
-  type VectorSearchEngines = "weaviate" | "supabase" | "supabased" | "exa" | "jina" | "databricks" | "youtube" | "zendesk" | "rescuenet" | "services"
+  type VectorSearchEngines = "weaviate" | "supabase" | "supabased" | "exa" | "jina" | "databricks" | "youtube" | "zendesk" | "rescuenet" | "services" | "box"
 
   interface VectorSerach {
     type: VectorSearchEngines
@@ -46,6 +47,7 @@ export async function doVectorSearch(p: VectorSerach) {
   if (p.type == "youtube") return searchYouTube(p)
   if (p.type == "zendesk") return zendesk.search(p)
   if (p.type == "rescuenet") return rescue.search(p)
+  if (p.type == "box") return searchBox(p)
 
 }
 

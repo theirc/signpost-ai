@@ -30,6 +30,7 @@ declare global {
       locale?: string //default locale
       items?: OnboardItem[]
       invalidOptionAnswer?: string
+      disableOnHITL?: boolean
     }
   }
 }
@@ -48,6 +49,7 @@ function create(agent: Agent) {
         locale: "en-US",
         items: [],
         invalidOptionAnswer: "Please answer using a valid option.",
+        disableOnHITL: false
       },
       conditionable: true,
     },
@@ -80,6 +82,13 @@ async function execute(worker: OnboardWorker, p: AgentParameters) {
   state.questions ||= {}
 
   let input: string = worker.fields.input.value || ""
+
+  // if (parameters.disableOnHITL) {
+  //   worker.fields.output.value = worker.fields.input.value
+  //   worker.fields.finished.value = true
+  //   return
+  // }
+
   worker.fields.output.value = ""
   input = input.trim().toLowerCase()
 
@@ -171,8 +180,8 @@ async function execute(worker: OnboardWorker, p: AgentParameters) {
   const hw = historyWorkers[0]
 
   if (hw && !worker.fields.finished.value) {
-    await hw.addMessageToHistory(p.uid, `${worker.agent.id}`, p.team, "user", input)
-    await hw.addMessageToHistory(p.uid, `${worker.agent.id}`, p.team, "assistant", worker.fields.output.value)
+    await hw.addMessageToHistory(p.uid, `${worker.agent.id}`, p.team, "user", input, hw.id)
+    await hw.addMessageToHistory(p.uid, `${worker.agent.id}`, p.team, "assistant", worker.fields.output.value, hw.id)
   }
 
 }
