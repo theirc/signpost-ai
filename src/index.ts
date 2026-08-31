@@ -11,7 +11,7 @@ import { telerivetHook, type TelerivetHookRequest } from './integrations/teleriv
 import { whatsapp } from './agents/integrations/whatsapp'
 import { channels } from './agents/integrations/channels'
 
-const version = '2.0826.1124'
+const version = '2.0831.1507'
 
 const app = express()
 app.use(cors())

@@ -106,6 +106,26 @@ async function getContact(integration: IntegrationPayload, team: string, codecKe
   return entry
 }
 
+// Realtime keeps the cached contact in sync, but it lands asynchronously. Commands answer right away,
+// so they apply their own patch with the same merge the realtime handler uses.
+function updateContact(contactId: string, patch: any) {
+  const key = idToKey.get(contactId)
+  if (!key) return
+  const entry = store.get(key)
+  if (entry) mergeWith(entry.contact, patch, replaceArrays)
+}
+
+// After a reset the queued messages would run against a state that no longer exists.
+function clearPending(contactId: string) {
+  const key = idToKey.get(contactId)
+  if (!key) return
+  const d = store.get(key)?.runtime.debounce
+  if (!d) return
+  if (d.timer) clearTimeout(d.timer)
+  d.timer = undefined
+  d.items = []
+}
+
 export async function loadApiKeys(team: string): Promise<APIKeys | null> {
   const ak = await supabase.from("api_keys").select("*").eq("team_id", team)
   if (!ak.data || ak.error) return null
@@ -115,4 +135,4 @@ export async function loadApiKeys(team: string): Promise<APIKeys | null> {
   }, {}) as APIKeys
 }
 
-export const cache = { getContact, init }
+export const cache = { getContact, init, updateContact, clearPending }
