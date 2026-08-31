@@ -4,120 +4,102 @@ const DEFAULT_MAX_ATTEMPTS = 2
 type Ctx = {
   playbook: Playbook
   state: PlaybookState
-  texts: string[]
+  emissions: PlaybookElement[]
   trace: PlaybookTrace[]
-  recoveries: number
 }
 
 /**
  * Runs one deterministic turn of the playbook. Pure: clones the incoming state and returns the new one.
- * With a null state (or a null cursor) it boots the session: enters the first item of main and ignores the input.
+ * With a null state (or a null cursor) it boots the session: enters the first item of the entry flow and ignores the input.
  */
 export function step(playbook: Playbook, state: PlaybookState | null, input: PlaybookInput): PlaybookTurn {
+  const ctx: Ctx = { playbook, state: state ? JSON.parse(JSON.stringify(state)) : initState(playbook), emissions: [], trace: [] }
+  const text = input?.text || ""
 
-  const fresh: PlaybookState = {
-    playbook_version: playbook.version,
-    rev: 0,
-    cursor: null,
-    stack: [],
-    vars: {},
-    attempts: 0
+  // Session boot
+  if (!ctx.state.cursor) {
+    const flow = playbook.flows?.[playbook.entry]
+    if (!flow?.length) {
+      trace(ctx, { layer: "boot", note: `entry flow missing or empty: ${playbook.entry}` })
+      return result(ctx)
+    }
+    trace(ctx, { layer: "boot", flow: playbook.entry, item: flow[0].id })
+    runChain(ctx, moveAndEnter(ctx, { flow: playbook.entry, item: flow[0].id }))
+    return finish(ctx)
   }
-
-  const ctx: Ctx = {
-    playbook,
-    state: state ? JSON.parse(JSON.stringify(state)) : fresh,
-    texts: [],
-    trace: [],
-    recoveries: 0
-  }
-
-  const message = input?.message || ""
 
   if (input?.id && input.id === ctx.state.last_inbound_id) {
     trace(ctx, { layer: "duplicate", note: `inbound already processed: ${input.id}` })
-    return finish(ctx, false)
+    return result(ctx)
+  }
+
+  if (ctx.state.status === "ended") {
+    trace(ctx, { layer: "ended" })
+    return result(ctx)
   }
 
   if (input?.id) ctx.state.last_inbound_id = input.id
 
-  // Session boot. A null cursor is both a session that never started and one closed by "end"
-  if (!ctx.state.cursor) {
-    const items = flowItems(playbook, "main")
-    if (!items.length) {
-      trace(ctx, { layer: "boot", note: "the main flow is empty" })
-      return finish(ctx, false)
-    }
-    trace(ctx, { layer: "boot", flow: "main", item: items[0].id })
-    runChain(ctx, moveAndEnter(ctx, { flow: "main", item: items[0].id }))
-    return finish(ctx)
-  }
-
-  // The playbook was edited while this conversation was live and the cursor no longer resolves.
-  // Restart instead of going mute. The message of this turn is dropped, same as on a boot
   const item = currentItem(ctx)
   if (!item) {
-    const target = recover(ctx, ctx.state.cursor)
-    if (target) runChain(ctx, moveAndEnter(ctx, target))
+    trace(ctx, { layer: "item", note: "the cursor points to a missing item" })
     return finish(ctx)
   }
 
   // Level 1: global guards. The first one that claims the message wins and the other levels do not run
   for (const guard of ctx.playbook.globals || []) {
-    if (!matches(guard.match, message)) continue
+    if (!matches(guard.match, text)) continue
     if (guard.set) Object.assign(ctx.state.vars, guard.set)
-    trace(ctx, { layer: "global", outcome: guard.then || "next" })
-    runChain(ctx, guard.then || "next")
+    trace(ctx, { layer: "global", outcome: guard.then })
+    runChain(ctx, guard.then)
     return finish(ctx)
   }
 
-  // Level 3: item interpretation (level 2, local escapes, does not exist yet).
-  // The label is the primary alias; the id is what the channel sends back when a button is tapped
-  const value = normalize(message)
-  const option = (item.options || []).find(o => matches(o.match, message) || (o.label && normalize(o.label) === value) || normalize(o.id) === value)
-
-  if (option) {
+  // Level 3: item interpretation (level 2, local escapes, does not exist in v1)
+  if (item.interpret === "exact") {
+    const option = (item.options || []).find(o => matchesOption(o, text))
+    if (!option) return noMatch(ctx, item)
     if (option.set) Object.assign(ctx.state.vars, option.set)
-    emit(ctx, option.say)
-    trace(ctx, { layer: "item", option: option.id, outcome: option.then || "next" })
-    runChain(ctx, option.then || "next")
+    emit(ctx, expand(ctx, item, option.say))
+    trace(ctx, { layer: "item", option: option.id, outcome: option.then })
+    runChain(ctx, option.then)
     return finish(ctx)
   }
 
-  // A slot cannot fail, so it also absorbs whatever the options did not claim
   if (item.slot) {
-    ctx.state.vars[item.slot] = message.trim()
-    trace(ctx, { layer: "item", outcome: item.then || "next", note: `slot ${item.slot}` })
+    if (!validate(item.slot.validate, text)) return noMatch(ctx, item)
+    ctx.state.vars[item.slot.name] = text.trim()
+    trace(ctx, { layer: "item", outcome: item.then || "next", note: `slot ${item.slot.name}` })
     runChain(ctx, item.then || "next")
     return finish(ctx)
   }
 
-  // Level 4: no-match policy. Only reachable on items with options
-  if (item.options?.length) {
-    const policy = item.on_no_match || ctx.playbook.defaults?.on_no_match || { policy: "reask" as const }
-    const max = policy.max ?? DEFAULT_MAX_ATTEMPTS
-    ctx.state.attempts++
-
-    if (ctx.state.attempts > max && policy.then) {
-      trace(ctx, { layer: "no_match", outcome: policy.then, note: `attempts ${ctx.state.attempts} > max ${max}` })
-      ctx.state.attempts = 0
-      runChain(ctx, policy.then)
-      return finish(ctx)
-    }
-
-    trace(ctx, { layer: "no_match", outcome: "stay:reask", note: `attempt ${ctx.state.attempts}/${max}` })
-    emit(ctx, item.say)
-    return finish(ctx)
-  }
-
-  // Absorbing item: it says something and offers nothing to match against. Only a global moves it
-  trace(ctx, { layer: "item", outcome: "stay:silent", note: "absorbing item" })
+  // The cursor should never rest on a routing item: the entry chain does not stop on them
+  trace(ctx, { layer: "item", note: "the cursor is resting on a routing item" })
   return finish(ctx)
 }
 
-// ── Control ─────────────────────────────────────────────────────────────────
+// ── Resolution levels ───────────────────────────────────────────────────────
 
-// Applies the outcome and walks the chain of routing items until one of them says something
+// Level 4: no-match policy
+function noMatch(ctx: Ctx, item: PlaybookItem): PlaybookTurn {
+  const policy = item.on_no_match || ctx.playbook.defaults?.on_no_match || { policy: "reask" as const }
+  const max = policy.max ?? DEFAULT_MAX_ATTEMPTS
+  ctx.state.attempts++
+
+  if (ctx.state.attempts > max && policy.then) {
+    trace(ctx, { layer: "no_match", outcome: policy.then, note: `attempts ${ctx.state.attempts} > max ${max}` })
+    ctx.state.attempts = 0
+    runChain(ctx, policy.then)
+    return finish(ctx)
+  }
+
+  trace(ctx, { layer: "no_match", outcome: "stay:reask", note: `attempt ${ctx.state.attempts}/${max}` })
+  emit(ctx, expand(ctx, item, item.say))
+  return finish(ctx)
+}
+
+// Applies the outcome and walks the chain of routing items until one of them consumes the message
 function runChain(ctx: Ctx, outcome: PlaybookOutcome | null) {
   let pending = outcome
   let budget = ROUTING_BUDGET
@@ -130,25 +112,22 @@ function runChain(ctx: Ctx, outcome: PlaybookOutcome | null) {
 
     if (pending === "stay:silent") return
     if (pending === "stay:reask") {
-      emit(ctx, currentItem(ctx)?.say)
+      const item = currentItem(ctx)
+      if (item) emit(ctx, expand(ctx, item, item.say))
       return
     }
-    // Closing the session, not freezing it: the next message boots a fresh one from main
     if (pending === "end") {
-      ctx.state.cursor = null
-      ctx.state.stack = []
+      ctx.state.status = "ended"
       return
     }
 
     if (pending === "next") {
-      // Array order defines what "next" means, and nothing else
-      const items = flowItems(ctx.playbook, ctx.state.cursor?.flow)
-      const next = items[items.findIndex(i => i.id === ctx.state.cursor?.item) + 1]
+      const next = nextCursor(ctx)
       if (!next) {
         trace(ctx, { layer: "enter", note: "no next item: the item is absorbing" })
         return
       }
-      pending = moveAndEnter(ctx, { flow: ctx.state.cursor.flow, item: next.id })
+      pending = moveAndEnter(ctx, next)
       continue
     }
 
@@ -174,12 +153,12 @@ function runChain(ctx: Ctx, outcome: PlaybookOutcome | null) {
 
     if (pending.startsWith("call:")) {
       const flow = pending.slice(5)
-      const items = flowItems(ctx.playbook, flow)
-      if (!items.length) {
+      const items = ctx.playbook.flows?.[flow]
+      if (!items?.length) {
         trace(ctx, { layer: "enter", note: `call to a missing or empty flow: ${flow}` })
         return
       }
-      ctx.state.stack.push({ ...ctx.state.cursor })
+      if (ctx.state.cursor) ctx.state.stack.push({ ...ctx.state.cursor })
       pending = moveAndEnter(ctx, { flow, item: items[0].id })
       continue
     }
@@ -191,27 +170,24 @@ function runChain(ctx: Ctx, outcome: PlaybookOutcome | null) {
 
 // Moves the cursor and enters the item. Returns the pending outcome, or null if the cursor rests here
 function moveAndEnter(ctx: Ctx, cursor: PlaybookCursor): PlaybookOutcome | null {
-  const item = getItem(ctx.playbook, cursor)
-
-  // Recurses at most once: recover only ever returns a cursor that resolves
+  const item = getItem(ctx, cursor)
   if (!item) {
-    const target = recover(ctx, cursor)
-    if (!target) return null
-    return moveAndEnter(ctx, target)
+    trace(ctx, { layer: "enter", note: `missing item: ${cursor.flow}.${cursor.item}` })
+    return null
   }
 
   ctx.state.cursor = { ...cursor }
   ctx.state.attempts = 0
 
-  if (item.condition && !meets(item.condition, ctx.state.vars)) {
+  if (item.requires && !requires(item.requires, ctx.state.vars)) {
     const outcome = item.else || "next"
-    trace(ctx, { layer: "enter", outcome, note: `condition not met: ${item.condition.join(" ")}` })
+    trace(ctx, { layer: "enter", outcome, note: `requires not met: ${item.requires}` })
     return outcome
   }
 
-  // Saying something is what makes an item wait: the cursor rests here until the next message
-  if (item.say) {
-    emit(ctx, item.say)
+  emit(ctx, expand(ctx, item, item.say))
+
+  if (consumes(item)) {
     trace(ctx, { layer: "enter", note: "waiting for a message" })
     return null
   }
@@ -221,128 +197,147 @@ function moveAndEnter(ctx: Ctx, cursor: PlaybookCursor): PlaybookOutcome | null 
   return outcome
 }
 
-// ── Recovery ────────────────────────────────────────────────────────────────
-
-/**
- * Resolves a cursor that no longer points anywhere, which happens when the playbook is edited
- * while conversations are live. Degrades one level at a time: the item is gone but the flow is still
- * there, so the flow restarts; the whole flow is gone, so the conversation restarts. vars survive
- * either way, so the conditions of the items walked on the way back land the contact where it was.
- * Returns null only when there is nowhere left to go, and then the session closes
- */
-function recover(ctx: Ctx, cursor: PlaybookCursor): PlaybookCursor | null {
-  ctx.recoveries++
-
-  // The item is gone but the flow is still there, so the flow restarts.
-  // The stack is left alone: the frames below still describe a valid return point
-  const items = flowItems(ctx.playbook, cursor.flow)
-  if (ctx.recoveries === 1 && items.length) {
-    trace(ctx, { layer: "recover", note: `missing item ${cursor.flow}.${cursor.item}, restarting the flow` })
-    return { flow: cursor.flow, item: items[0].id }
-  }
-
-  // Either the whole flow is gone, or restarting it landed on the same hole: the routing of a flow can
-  // point straight back at the deleted item. The frames point into a layout that no longer holds
-  const main = flowItems(ctx.playbook, "main")
-  if (ctx.recoveries <= 2 && main.length) {
-    ctx.state.stack = []
-    trace(ctx, { layer: "recover", note: `cannot resolve ${cursor.flow}.${cursor.item}, restarting the conversation` })
-    return { flow: "main", item: main[0].id }
-  }
-
-  // main routes into the hole as well. Close the session: the next message boots a fresh one
-  ctx.state.cursor = null
-  ctx.state.stack = []
-  trace(ctx, { layer: "recover", note: `unrecoverable from ${cursor.flow}.${cursor.item}, closing the session` })
-  return null
-}
-
 // ── Playbook reads ──────────────────────────────────────────────────────────
 
-// "main" is a reserved cursor key that addresses playbook.main; anything else is a satellite flow
-function flowItems(playbook: Playbook, flow: string): PlaybookItem[] {
-  return (flow === "main" ? playbook.main : playbook.flows?.[flow]) || []
-}
-
-function getItem(playbook: Playbook, cursor: PlaybookCursor): PlaybookItem | null {
-  return flowItems(playbook, cursor?.flow).find(i => i.id === cursor?.item) || null
+function getItem(ctx: Ctx, cursor: PlaybookCursor): PlaybookItem | null {
+  return (ctx.playbook.flows?.[cursor?.flow] || []).find(i => i.id === cursor?.item) || null
 }
 
 function currentItem(ctx: Ctx): PlaybookItem | null {
-  return ctx.state.cursor ? getItem(ctx.playbook, ctx.state.cursor) : null
+  return ctx.state.cursor ? getItem(ctx, ctx.state.cursor) : null
+}
+
+// Array order defines what "next" means, and nothing else
+function nextCursor(ctx: Ctx): PlaybookCursor | null {
+  const cursor = ctx.state.cursor
+  const items = ctx.playbook.flows?.[cursor?.flow] || []
+  const index = items.findIndex(i => i.id === cursor?.item)
+  if (index < 0 || index + 1 >= items.length) return null
+  return { flow: cursor.flow, item: items[index + 1].id }
+}
+
+// Having interpret or slot is what makes the item consume the message
+function consumes(item: PlaybookItem): boolean {
+  return !!item.interpret || !!item.slot
 }
 
 // ── Pure helpers ────────────────────────────────────────────────────────────
 
-// Trim, lowercase, no diacritics and no emojis, so a label like "🏥 Medical care" matches "medical care"
-export function normalize(text: string): string {
-  return (text || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u200D]/gu, "")
-    .replace(/\s+/g, " ")
-    .trim()
+function initState(playbook: Playbook): PlaybookState {
+  return { playbook_version: playbook.version, rev: 0, cursor: null, stack: [], vars: {}, attempts: 0, status: "active" }
 }
 
-function matches(list: string[] | undefined, text: string): boolean {
+export function normalize(text: string): string {
+  return (text || "").trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "")
+}
+
+function matches(list: string[], text: string): boolean {
   const value = normalize(text)
   return (list || []).some(m => m === "*" || normalize(m) === value)
 }
 
-// Closed vocabulary, stored already split: ["var"] is a truth test,
-// ["var", test] asks about presence, ["var", op, value] compares
-function meets(condition: PlaybookCondition, vars: { [key: string]: any }): boolean {
-  const left = vars?.[condition[0]]
-  if (condition.length === 1) return !!left
+// The id and the label work as implicit aliases: the id covers numeric aliases ("1", "2", "3"),
+// and the label covers the user typing back the text of a quick reply instead of tapping it
+function matchesOption(option: PlaybookOption, text: string): boolean {
+  const value = normalize(text)
+  return matches(option.match, text) || normalize(option.id) === value || (!!option.label && normalize(option.label) === value)
+}
 
-  // Presence, not truth: 0 and false are set. Writing null or "" with set is how an item invalidates a var
-  if (condition.length === 2) {
-    const set = left !== undefined && left !== null && left !== ""
-    return condition[1] === "isSet" ? set : !set
+function interpolate(text: string, vars: { [key: string]: any }): string {
+  return (text || "").replace(/\{(\w+)\}/g, (_, key) => (vars?.[key] !== undefined ? String(vars[key]) : `{${key}}`))
+}
+
+// Interpolates the texts and resolves the quick replies declared with from: "options"
+function expand(ctx: Ctx, item: PlaybookItem, elements: PlaybookElement[]): PlaybookElement[] {
+  const out: PlaybookElement[] = []
+
+  for (const element of elements || []) {
+    if (element.kind === "quick_replies") {
+      const options = element.from === "options"
+        ? (item.options || []).filter(o => o.label).map(o => ({ id: o.id, label: o.label }))
+        : (element.options || [])
+      if (options.length) out.push({ kind: "quick_replies", options })
+      continue
+    }
+    out.push({ kind: "text", content: interpolate(element.content, ctx.state.vars) })
   }
 
-  const right = condition[2]
-  const same = typeof left === "string" && typeof right === "string" ? normalize(left) === normalize(right) : left === right
+  return out
+}
 
-  switch (condition[1]) {
-    case "==": return same
-    case "!=": return !same
+// Closed vocabulary: "text" | "text:min..max" | "number" | "number:min..max"
+function validate(rule: string, text: string): boolean {
+  const value = (text || "").trim()
+  if (!value) return false
+
+  const [kind, range] = (rule || "").split(":")
+  const [rawMin, rawMax] = (range || "").split("..")
+  const min = rawMin ? Number(rawMin) : null
+  const max = rawMax ? Number(rawMax) : null
+
+  if (kind === "text") return (min === null || value.length >= min) && (max === null || value.length <= max)
+
+  if (kind === "number") {
+    const parsed = Number(value)
+    if (Number.isNaN(parsed)) return false
+    return (min === null || parsed >= min) && (max === null || parsed <= max)
+  }
+
+  return false
+}
+
+// Closed vocabulary: "var op literal" with == != >= <= > <, or a bare "var" meaning flag present
+function requires(expression: string, vars: { [key: string]: any }): boolean {
+  const comparison = (expression || "").trim().match(/^([A-Za-z_]\w*)\s*(==|!=|>=|<=|>|<)\s*(.+)$/)
+
+  if (!comparison) {
+    const flag = (expression || "").trim()
+    return /^[A-Za-z_]\w*$/.test(flag) ? !!vars?.[flag] : false
+  }
+
+  const left = vars?.[comparison[1]]
+  const right = literal(comparison[3])
+
+  switch (comparison[2]) {
+    case "==": return equals(left, right)
+    case "!=": return !equals(left, right)
     case ">": return Number(left) > Number(right)
     case ">=": return Number(left) >= Number(right)
     case "<": return Number(left) < Number(right)
     case "<=": return Number(left) <= Number(right)
   }
+
+  return false
+}
+
+function literal(raw: string): any {
+  const value = raw.trim().replace(/^["']|["']$/g, "")
+  if (value === "true") return true
+  if (value === "false") return false
+  if (value !== "" && !Number.isNaN(Number(value))) return Number(value)
+  return value
+}
+
+function equals(left: any, right: any): boolean {
+  if (typeof left === "string" && typeof right === "string") return normalize(left) === normalize(right)
+  return left === right
 }
 
 // ── Turn accumulators ───────────────────────────────────────────────────────
 
-function emit(ctx: Ctx, text: string | undefined) {
-  if (!text) return
-  ctx.texts.push(text.replace(/\{(\w+)\}/g, (_, key) => (ctx.state.vars?.[key] !== undefined ? String(ctx.state.vars[key]) : `{${key}}`)))
+function emit(ctx: Ctx, elements: PlaybookElement[]) {
+  for (const element of elements) ctx.emissions.push(element)
 }
 
 function trace(ctx: Ctx, entry: Omit<PlaybookTrace, "seq">) {
   ctx.trace.push({ seq: ctx.trace.length, flow: ctx.state.cursor?.flow, item: ctx.state.cursor?.item, ...entry })
 }
 
-// Assembles the envelope: every text of the turn joined, plus the options of the item the cursor came to rest on
-function finish(ctx: Ctx, bump = true): PlaybookTurn {
-  if (bump) ctx.state.rev++
+function result(ctx: Ctx): PlaybookTurn {
+  return { emissions: ctx.emissions, state: ctx.state, trace: ctx.trace }
+}
 
-  const output: PlaybookOutput = {}
-  if (!ctx.texts.length) return { output, state: ctx.state, trace: ctx.trace }
-
-  output.response = ctx.texts.join("\n\n")
-
-  // The buttons ride on the message, so a turn that says nothing carries none
-  const replies: PlaybookQuickReply[] = []
-
-  for (const option of currentItem(ctx)?.options || []) {
-    if (option.label) replies.push({ id: option.id, label: option.label })
-  }
-
-  if (replies.length) output.quick_replies = replies
-
-  return { output, state: ctx.state, trace: ctx.trace }
+function finish(ctx: Ctx): PlaybookTurn {
+  ctx.state.rev++
+  return result(ctx)
 }

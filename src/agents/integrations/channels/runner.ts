@@ -1,6 +1,7 @@
 import { agents } from "../../agent"
 import { splitBreaks } from "./breaks"
 import { cache, loadApiKeys } from "./cache"
+import { matchCommand, processCommand } from "./commands"
 import { coordinate } from "./debounce"
 import { saveAndEvaluate } from "./conversation"
 
@@ -70,7 +71,9 @@ async function handle<TPayload>(adapter: ChannelAdapter<TPayload>, channel: Chan
 
   const { input, integration } = parsed
 
-  if (adapter.typing) {
+  const command = matchCommand(input.content)
+
+  if (!command && adapter.typing) {
     try {
       await adapter.typing(channel, input)
     } catch (err) {
@@ -80,6 +83,17 @@ async function handle<TPayload>(adapter: ChannelAdapter<TPayload>, channel: Chan
 
   const cached = await cache.getContact(integration, channel.team, apiKeys.codec)
   if (!cached) return "Could not resolve contact."
+
+  // Commands are handled here: no agent, no persistence, no evaluation.
+  if (command) {
+    const response = await processCommand(input.content, cached.contact.id)
+    try {
+      if (response) await adapter.send(channel, input, { response, files: [], quickReplies: [] })
+    } catch (err) {
+      return `Error sending command response: ${err}`
+    }
+    return ""
+  }
 
   const run = (i: ChannelInput) => runAgent(adapter, channel, cached, i, apiKeys, integration)
   await coordinate(cached, channel.debounce_type, channel.debounce_time, input, run)
