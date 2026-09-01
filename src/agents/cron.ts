@@ -110,6 +110,7 @@ type CampaignParameters = {
   all_team?: boolean
   contact_ids?: string[]
   area_code?: string
+  last_heard_days?: number
 }
 
 // Maps the campaign's simple name/value list to the WhatsApp Graph API `components` shape (named body parameters).
@@ -150,6 +151,10 @@ async function sendCampaign(job: Job, params: CampaignParameters, apiKeys: Recor
   } else {
     query = query.in("id", params.contact_ids || [])
   }
+
+  // Skip contacts we haven't heard from lately. A contact that never wrote has no timestamp and never matches, which is intended.
+  const lastHeardDays = Number(params.last_heard_days) || 0
+  if (lastHeardDays > 0) query = query.gte("last_inbound_at", new Date(Date.now() - lastHeardDays * 86400000).toISOString())
 
   const { data: contacts, error } = await query
   if (error || !contacts) {

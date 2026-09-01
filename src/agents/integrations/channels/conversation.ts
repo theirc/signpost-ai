@@ -33,6 +33,12 @@ export async function saveAndEvaluate({ agent, contact, message, response, apiKe
     console.error("[channels] Error saving messages:", err)
   }
 
+  // Only campaigns read this, so it can wait until after the answer went out.
+  if (contact && message) {
+    const { error } = await supabase.from("contacts").update({ last_inbound_at: new Date().toISOString() }).eq("id", contact.id)
+    if (error) console.error("[channels] Error updating last_inbound_at:", error)
+  }
+
   await runEvals(agent, contact, message, response, userMessageId, agentMessageId, apiKeys)
 
 }
