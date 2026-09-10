@@ -1,6 +1,6 @@
 import { faker } from "@faker-js/faker"
 import { supabase } from "../../db"
-import { codec } from "../encoder"
+import { contacts } from "../contacts"
 import { cache, loadApiKeys } from "./cache"
 
 interface Command {
@@ -17,6 +17,7 @@ const commands: Command[] = [
   { aliases: ["/reset", "/إعادة تشغيل"], run: reset },
   { aliases: ["/deanonymizeme"], run: deanonymize },
   { aliases: ["/anonymizeme"], run: anonymize },
+  { aliases: ["/deleteme"], run: deleteMe },
 ]
 
 const byAlias = new Map<string, Command>()
@@ -42,7 +43,8 @@ export async function processCommand(message: string, contactId: string): Promis
   }
 }
 
-async function reset(contactId: string): Promise<string> {
+// Exported so the contact CRUD page can run the same cleanup before deleting the contact row itself.
+export async function reset(contactId: string): Promise<string> {
 
   await supabase.from("states").delete().eq("id", contactId)
   await supabase.from("history").delete().eq("uid", contactId)
@@ -69,6 +71,17 @@ async function reset(contactId: string): Promise<string> {
   return "The chat history and state has been reset."
 }
 
+// Same cleanup as /reset, then the contact row itself. Once the row is gone the cache entry is evicted
+// outright rather than patched, so the next message from this contact starts completely fresh.
+async function deleteMe(contactId: string): Promise<string> {
+
+  await reset(contactId)
+  await supabase.from("contacts").delete().eq("id", contactId)
+  cache.evictContact(contactId)
+
+  return "This contact and all its data have been deleted."
+}
+
 // Contacts are stored with a faker name while the real identity stays encrypted in contacts.data, so
 // de-anonymizing is decrypting that payload and writing the real name back. Both commands only touch the
 // name: the avatar is always a faker portrait, there is no real one to restore or to hide.
@@ -78,7 +91,7 @@ async function deanonymize(contactId: string): Promise<string> {
   if (!contact) return "Contact not found."
 
   const apiKeys = await loadApiKeys(contact.team)
-  const payload = await parseContactData(contact.data, apiKeys?.codec)
+  const payload = await contacts.decrypt(contact, apiKeys?.codec)
   if (!payload) return "Invalid encrypted data."
 
   const name = payload.name || payload.phone
@@ -100,40 +113,4 @@ async function anonymize(contactId: string): Promise<string> {
   cache.updateContact(contactId, patch)
 
   return `Contact anonymized as ${patch.name}.`
-}
-
-// contacts.data is not guaranteed to hold what we expect: decrypt throws on a bad key or corrupt input,
-// legacy rows hold plain json, and someone may have written anything in there. Never throws, null on invalid.
-async function parseContactData(raw: any, codecKey: string): Promise<IntegrationPayload | null> {
-
-  if (typeof raw !== "string" || !raw.trim()) return null
-
-  let parsed: any = null
-
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    if (!codecKey) {
-      console.error("[commands] No codec key available to decrypt contact data")
-      return null
-    }
-    try {
-      parsed = JSON.parse(await codec.decrypt(raw, codecKey))
-    } catch (err) {
-      console.error("[commands] Could not decrypt contact data:", err)
-      return null
-    }
-  }
-
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    console.error("[commands] Contact data is not an object")
-    return null
-  }
-
-  if (!parsed.name && !parsed.phone && !parsed.external_id && !parsed.contact_id) {
-    console.error("[commands] Contact data has no identity fields")
-    return null
-  }
-
-  return parsed as IntegrationPayload
 }

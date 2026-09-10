@@ -1,6 +1,6 @@
 import axios from "axios"
 import { isBrowser } from "../isbrowser"
-import { codec } from "./encoder"
+import { contacts } from "./contacts"
 
 interface TelerivetMessage {
   id?: string
@@ -79,8 +79,8 @@ async function getMessageStatus(project_id: string, message_id: string) {
 }
 
 async function sendMessageToContact(message: string, contact: Contact, codecKey: string) {
-  const enc = await codec.decrypt(contact.data, codecKey)
-  const payl = JSON.parse(enc) as IntegrationPayload
+  const payl = await contacts.decrypt(contact, codecKey)
+  if (!payl) return
   await sendMessage(message, payl)
 }
 

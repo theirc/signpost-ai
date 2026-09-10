@@ -1,5 +1,5 @@
 import { supabase } from "../../db"
-import { saveMessage } from "../messages"
+import { saveMessage, getOrCreateContact } from "../messages"
 import { evaluate, updateContact } from "../../evals/evals"
 
 interface SaveAndEvaluateParams {
@@ -22,11 +22,11 @@ export async function saveAndEvaluate({ agent, contact, message, response, apiKe
 
   try {
     if (message) {
-      const um = await saveMessage({ contact: contact.id, role: "user", message, channel: type, team, agent: agent.id, integration })
+      const um = await saveMessageOrRecreateContact({ contact: contact.id, role: "user", message, channel: type, team, agent: agent.id, integration }, contact, apiKeys, team)
       userMessageId = um.id
     }
     if (response) {
-      const am = await saveMessage({ contact: contact.id, role: "assistant", message: response, channel: type, team, agent: agent.id, integration })
+      const am = await saveMessageOrRecreateContact({ contact: contact.id, role: "assistant", message: response, channel: type, team, agent: agent.id, integration }, contact, apiKeys, team)
       agentMessageId = am.id
     }
   } catch (err) {
@@ -41,6 +41,24 @@ export async function saveAndEvaluate({ agent, contact, message, response, apiKe
 
   await runEvals(agent, contact, message, response, userMessageId, agentMessageId, apiKeys)
 
+}
+
+// If the contact was deleted after the cache resolved it (eg. a "Reset Team Content"), the insert fails
+// on the messages_contact_fkey constraint. The contact id is derived deterministically from the
+// integration payload, so recreating it reproduces the same id: self-heal once and retry, instead of
+// dropping the message. `contact` is the same object cache.ts keeps in memory, so patching it in place
+// also fixes the cache for whatever comes next.
+async function saveMessageOrRecreateContact(payload: Message, contact: Contact, apiKeys: APIKeys, team: string): Promise<Message> {
+  try {
+    return await saveMessage(payload)
+  } catch (err: any) {
+    if (err?.code !== "23503") throw err
+    console.error("[channels] Contact was deleted, recreating before retry:", contact.id)
+    const recreated = await getOrCreateContact(payload.integration, apiKeys.codec, team)
+    if (!recreated?.id) throw err
+    Object.assign(contact, recreated)
+    return await saveMessage({ ...payload, contact: recreated.id })
+  }
 }
 
 async function runEvals(agent: Agent, contact: Contact, message: string, response: string, userMessageId: string, agentMessageId: string, apiKeys: APIKeys) {

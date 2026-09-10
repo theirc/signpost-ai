@@ -1,5 +1,6 @@
 import { supabase } from "../db"
 import { codec } from "./encoder"
+import { contacts } from "./contacts"
 import { faker } from '@faker-js/faker'
 
 
@@ -22,13 +23,13 @@ export async function getOrCreateContact(integration: IntegrationPayload, passwo
     const { digits, countryCode } = parsePhone(integration.phone)
     const id = integration.contact ? integration.contact : await codec.encrypt(digits || integration.phone || integration.external_id || integration.contact_id, password)
 
-    const data = await codec.encrypt(JSON.stringify({
+    const data = await contacts.encrypt({
       name: integration.name,
       phone: integration.phone,
       external_id: integration.external_id,
       route_id: integration.route_id,
       contact_id: integration.contact_id,
-    } satisfies IntegrationPayload), password)
+    }, password)
 
     const { data: existingContact } = await supabase.from("contacts").select().eq("id", id).single()
     if (existingContact) {
