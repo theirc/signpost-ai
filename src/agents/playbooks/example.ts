@@ -1,182 +1,197 @@
 /**
- * Smoke playbook: a Signpost style referral desk. Every item is deterministic except the qa flow.
- * Exercises consent as an interrupt, closed options, a captured slot, two levels of call/return,
- * chained condition gates, the no-match policy and an ai item with a declared escape.
+ * Smoke playbook: a Signpost style referral desk. main runs the intake and moves into the flow of the
+ * country the contact is in, because what you can tell someone depends on where they are. Exercises the
+ * capture and confirm loop, conditions that keep a restart from asking twice for what it already knows,
+ * a menu that jumps around inside its own flow, a condition filtering an item out, an option that is only
+ * on offer sometimes, and an ai item.
+ *
+ * There is no call and no return. The callback question is written once per country flow, which is less
+ * to read than a stack, and every item leaves the same way anything else does: through an option.
  */
+
 export const examplePlaybook: Playbook = {
   id: "pb_referral",
   version: 1,
 
-  config: { model: "claude-haiku-4-5-20251001" },
+  // on_lost is where a conversation goes when the item it was parked on no longer exists. Here it is the
+  // country question rather than the top: it re-enters the country flow, which is where everything is
+  config: { model: "claude-haiku-4-5-20251001", on_lost: { flow: "main", item: "ask_country" } },
 
-  // Checked before the globals and before the item, so a contact who has not consented cannot navigate
-  // anywhere until they answer. Adding a terms of service to a playbook already in production is this one line
-  interrupts: [
-    { condition: ["consent", "!=", true], then: "call:consent" },
-  ],
-
-  // Opt-out is deliberately not here: unsubscribing is a mark on the contact, not on one conversation,
-  // so it belongs to the platform ring alongside format translation
-  globals: [
-    { match: ["menu", "start over"], then: "goto:main.menu" },
-  ],
-
+  // No escalation and nothing counted: with no catch-all anywhere, anything that is not one of the options
+  // puts this in front of the question and asks again
   defaults: {
-    on_no_match: { policy: "reask", max: 2, then: "goto:main.help" },
+    on_no_match: { say: "Please pick one of the options." },
   },
 
   main: [
     {
+      // The three items of the intake carry the same kind of condition: a var that remembers the answer, so
+      // a reset walks past them instead of asking a second time. It is also what lets the platform ring seed
+      // a known contact and have the desk skip straight to the question it does not have yet
+      id: "consent",
+      condition: ["consent", "!=", true],
+      say: "Hello, this is the Signpost desk. May we store your answers to refer you to a service?",
+      options: [
+        { label: "Yes", match: ["ok", "sure", "i agree"], set: { consent: true } },
+        // Nothing here writes consent, so the reset comes straight back to this same question. That is what
+        // "we cannot continue without it" means when there is nowhere else to be
+        { label: "No", match: ["nope"], say: "We cannot continue without it.", action: { type: "reset" } },
+      ],
+    },
+    {
+      // An item only captures if it names a var. Free text, so no options: whatever the contact writes
+      // lands in vars.name and the conversation moves on
+      id: "ask_name",
+      condition: ["name", "isEmpty"],
+      say: "What is your name?",
+      set: "name",
+    },
+    {
+      // The confirmation loop, which is what a capture is normally worth: No forgets the name and sends the
+      // cursor back up, which re-opens the item above because its condition reads the var that was just
+      // cleared. Going backwards is a jump, so it lives on an option
+      id: "confirm_name",
+      condition: ["name_confirmed", "isEmpty"],
+      say: "Thanks, {{name}}. Did I get that right?",
+      options: [
+        { label: "Yes", match: ["correct", "right"], set: { name_confirmed: true } },
+        { label: "No", match: ["wrong", "nope"], say: "Let me take that again.", set: { name: null }, action: { type: "goto", flow: "main", item: "ask_name" } },
+      ],
+    },
+    {
+      // Last item of main and deliberately ungated: someone who starts over is usually somewhere else, or
+      // asking on behalf of someone who is. Its options are what picks the desk that answers
       id: "ask_country",
-      // Nothing guards it. Reaching an item that emits is the delivery, and no var cancels that:
-      // how far the conversation already got is the business of the cursor, not of something stored
-      intent: "Location. The last option is a catch-all, so this item can never fall into no-match",
       say: "Where are you right now?",
       options: [
-        { label: "🇬🇷 Greece", match: ["grecia"], set: { country: "Greece" } },
-        { label: "🇮🇹 Italy", match: ["italia"], set: { country: "Italy" } },
-        { label: "Somewhere else", match: ["*"], set: { country: "other" } },
+        { label: "🇬🇷 Greece", match: ["grecia"], set: { country: "Greece" }, action: { type: "goto", flow: "greece", item: "menu" } },
+        { label: "🇮🇹 Italy", match: ["italia"], set: { country: "Italy" }, action: { type: "goto", flow: "italy", item: "menu" } },
       ],
-    },
-    {
-      id: "menu",
-      intent: "Hub of the conversation. The satellites return here, and re-entering re-emits the menu",
-      say: "What do you need help with in {{country}}?",
-      // The only item that declares its ids: these are what a referral report counts, so they cannot
-      // move when the copy is reworded or translated. Everywhere else the label is identity enough
-      options: [
-        { id: "legal", label: "⚖️ Legal aid", match: ["1", "lawyer", "papers"], set: { need: "legal" }, then: "call:referral" },
-        { id: "medical", label: "🏥 Medical care", match: ["2", "doctor", "health"], set: { need: "medical" }, then: "call:referral" },
-        { id: "ask", label: "💬 Ask a question", match: ["3", "question"], then: "call:qa" },
-        { id: "done", label: "That is all", match: ["4", "nothing", "bye"], then: "goto:main.farewell" },
-      ],
-    },
-    {
-      id: "help",
-      intent: "Destination of the no-match policy once the attempts run out",
-      say: "Let me put you back on track.",
-      options: [{ label: "Back to the menu", match: ["*"], then: "goto:main.menu" }],
-    },
-    {
-      // End of the flow: it says goodbye and stays. Only a global can move the cursor from here
-      id: "farewell",
-      // The {{#if}} is not logic: this is one text with an optional piece of data inside it.
-      // Routing still lives entirely in condition and options
-      say: "Thanks for reaching out{{#if phone}}, we will call you at {{phone}}{{/if}}. Write \"menu\" any time to start again.",
     },
   ],
 
   flows: {
 
-    // Not an item of main: an interrupt, so it runs once for a contact who has not accepted and hands
-    // the conversation back on the exact item it took it from. Modelling it as main[0] with a condition
-    // over its own var was the workaround for not having this
-    consent: [
+    greece: [
       {
-        id: "ask",
-        intent: "Data protection consent. Runs before anything else and returns wherever the contact was",
-        say: "Hello, this is the Signpost desk. May we store your answers to refer you to a service?",
+        id: "menu",
+        intent: "The menu lives inside the country flow and jumps around it. Nothing returns to main on its own",
+        say: "What do you need help with in {{country}}, {{name}}?",
+        // The only item that declares its ids: these are what a referral report counts, so they cannot move when the copy is reworded or translated. Everywhere else the label is identity enough
         options: [
-          // The one place where a var legitimately records that something ran: an interrupt lives outside
-          // the path of the cursor, so nothing else remembers it. This set is what falsifies its condition
-          { label: "Yes", match: ["ok", "sure", "i agree"], set: { consent: true }, then: "return" },
-          // end wipes the vars and closes the session, which is the only decent answer to someone who
-          // just said we cannot store anything. If they write again we ask from scratch
-          { label: "No", match: ["nope"], say: "Understood, we cannot continue without it. Take care.", then: "end" },
+          { id: "legal", label: "⚖️ Legal aid", match: ["1", "lawyer", "papers"], action: { type: "goto", flow: "greece", item: "legal" } },
+          { id: "medical", label: "🏥 Medical care", match: ["2", "doctor", "health"], action: { type: "goto", flow: "greece", item: "medical" } },
+          { id: "ask", label: "💬 Ask a question", match: ["3", "question"], action: { type: "goto", flow: "greece", item: "qa" } },
+          { id: "done", label: "That is all", match: ["4", "nothing"], action: { type: "goto", flow: "greece", item: "wrap" } },
         ],
       },
-    ],
-
-    // Called from two different options and it does not know which one. The var is the only input it has
-    referral: [
       {
-        id: "gate_legal",
-        intent: "First level: which need. Chained because a condition holds a single comparison",
-        condition: ["need", "==", "legal"],
-        then: "goto:referral.legal",
-      },
-      {
-        id: "gate_medical",
-        condition: ["need", "==", "medical"],
-        then: "goto:referral.medical",
-        else: "goto:referral.unknown",
-      },
-      {
-        // Second level: this is the case options cannot express. The answer depends on need AND country,
-        // captured several turns apart. The option that was tapped only knew about need
         id: "legal",
-        intent: "Splits the legal referral by country. Compares against Greece with normalization",
-        condition: ["country", "==", "greece"],
-        then: "goto:referral.legal_greece",
-        else: "goto:referral.legal_other",
-      },
-      {
-        id: "legal_greece",
         say: "In Greece, GCR offers free legal counselling in Athens and Thessaloniki.",
-        options: [
-          { label: "Ask for a callback", match: ["call me"], then: "call:contact" },
-          { label: "Back to the menu", match: ["*"], then: "return" },
-        ],
-      },
-      {
-        id: "legal_other",
-        say: "We do not have a legal partner mapped in {{country}} yet.",
-        options: [{ label: "Back to the menu", match: ["*"], then: "return" }],
+        options: [{ label: "Back to the menu", match: ["menu", "back"], action: { type: "goto", flow: "greece", item: "menu" } }],
       },
       {
         id: "medical",
         say: "Primary care is free at public health centres. Bring any document you have.",
         options: [
-          { label: "Ask for a callback", match: ["call me"], then: "call:contact" },
-          { label: "Back to the menu", match: ["*"], then: "return" },
+          // No action: whoever wants more falls through to the items below, which is what a sequence is for
+          { label: "Tell me more", match: ["more"] },
+          { label: "Back to the menu", match: ["menu", "back"], action: { type: "goto", flow: "greece", item: "menu" } },
         ],
       },
       {
-        id: "unknown",
-        intent: "No gate claimed the need. Unreachable while the menu only sets legal or medical",
-        say: "I do not have that service mapped.",
-        options: [{ label: "Back to the menu", match: ["*"], then: "return" }],
+        id: "ask_age",
+        intent: "Captured once, and what comes after it is filtered by the answer",
+        condition: ["age", "isEmpty"],
+        say: "How old are you? Some of what I can offer depends on it.",
+        set: "age",
       },
-    ],
-
-    // The only flow that is not deterministic
-    qa: [
       {
-        id: "open",
+        // The filter, and the whole of what a condition does: it decides whether this item runs, never
+        // where the conversation goes. A minor simply does not see it and moves on to the one below
+        id: "adult_clinic",
+        condition: ["age", ">=", 18],
+        say: "There is also a walk-in clinic for adults on Alexandras Avenue, no appointment needed.",
+        options: [{ label: "Back to the menu", match: ["menu", "back"], action: { type: "goto", flow: "greece", item: "menu" } }],
+      },
+      {
+        // The last item of a filtered run carries no condition, so the run can never fall off the end of
+        // the flow. That is what the validator checks, and it is why this one is not guarded by age < 18
+        id: "minor_support",
+        say: "For under 18s, METAdrasi runs a guardianship and health support programme.",
+        options: [{ label: "Back to the menu", match: ["menu", "back"], action: { type: "goto", flow: "greece", item: "menu" } }],
+      },
+      {
+        id: "qa",
         type: "ai",
-        intent: "Open questions. The escapes are declared as options, so leaving never depends on the model",
+        intent: "Open questions. The escape is declared as an option, so leaving never depends on the model",
         // Both texts are authored and both interpolate. say is emitted once, on entry;
         // prompt is never emitted, it goes to the adapter on every message that lands here
         say: "Go ahead, ask me anything about services in {{country}}.",
         prompt: "You are the Signpost desk in {{country}}. Answer briefly and only about available services. Say so when you do not know.",
-        // No catch-all here on purpose: a "*" would swallow every question before the model sees it
         options: [
-          { label: "Back to the menu", match: ["done", "thanks", "that is all"], then: "return" },
+          { label: "Back to the menu", match: ["done", "thanks", "that is all"], action: { type: "goto", flow: "greece", item: "menu" } },
+        ],
+      },
+      {
+        // Written out here and again in italy, which is the trade the removal of call bought: two short
+        // questions instead of a shared flow, a stack, and a rule about where a return lands
+        id: "ask_phone",
+        say: "What number should we call?",
+        set: "phone",
+      },
+      {
+        // No action on its option, so it falls through to the item below
+        id: "confirm_phone",
+        say: "Noted, we will call you at {{phone}}.",
+        options: [{ label: "Thanks", match: ["thank you", "ok"] }],
+      },
+      {
+        id: "wrap",
+        say: "Anything else before you go?",
+        options: [
+          // Only on offer while we do not have the number, so it disappears on the way back from
+          // confirm_phone. An option with a condition that does not hold is not drawn, and typing its
+          // label does not select it either
+          { label: "Ask for a callback", match: ["call me"], condition: ["phone", "isEmpty"], action: { type: "goto", flow: "greece", item: "ask_phone" } },
+          { label: "Back to the menu", match: ["menu", "back"], action: { type: "goto", flow: "greece", item: "menu" } },
+          { label: "No, that is all", match: ["nothing else"], say: "Take care, {{name}}.", action: { type: "reset" } },
         ],
       },
     ],
 
-    // Reusable satellite, called from two items of referral, one stack level deeper
-    contact: [
+    // Same services, different country, different answers. That is the whole reason the flow is the country
+    italy: [
       {
-        // The clearest case for a condition, and the shape of a legitimate one: it reads a var another
-        // item writes, so it asks about data and not about whether this flow already ran. No message,
-        // no choice, nothing options could express. A single element tuple is a truth test
-        id: "check",
-        intent: "Never ask twice for the same data",
-        condition: ["phone"],
-        then: "return",
+        id: "menu",
+        say: "What do you need help with in {{country}}, {{name}}?",
+        options: [
+          { id: "legal", label: "⚖️ Legal aid", match: ["1", "lawyer", "papers"], action: { type: "goto", flow: "italy", item: "legal" } },
+          { id: "done", label: "That is all", match: ["nothing"], action: { type: "goto", flow: "italy", item: "wrap" } },
+        ],
+      },
+      {
+        id: "legal",
+        say: "In Italy, ASGI runs a free legal helpline for asylum seekers.",
+        options: [{ label: "Back to the menu", match: ["menu", "back"], action: { type: "goto", flow: "italy", item: "menu" } }],
       },
       {
         id: "ask_phone",
         say: "What number should we call?",
-        slot: "phone",
+        set: "phone",
       },
       {
-        // Says and waits like any other item. The return happens on the next message, not on entry
-        id: "confirm",
+        id: "confirm_phone",
         say: "Noted, we will call you at {{phone}}.",
-        options: [{ label: "Thanks", match: ["*"], then: "return" }],
+        options: [{ label: "Thanks", match: ["thank you", "ok"] }],
+      },
+      {
+        id: "wrap",
+        say: "Anything else before you go?",
+        options: [
+          { label: "Ask for a callback", match: ["call me"], condition: ["phone", "isEmpty"], action: { type: "goto", flow: "italy", item: "ask_phone" } },
+          { label: "No, that is all", match: ["nothing else"], say: "Take care, {{name}}.", action: { type: "reset" } },
+        ],
       },
     ],
 

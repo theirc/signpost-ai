@@ -1,7 +1,7 @@
 import { supabase } from "./db"
 import { Database } from "./supabase"
 import { whatsapp } from "./integrations/whatsapp"
-import { codec } from "./integrations/encoder"
+import { contacts as contactCodec } from "./integrations/contacts"
 
 type Job = Database["public"]["Tables"]["jobs"]["Row"]
 
@@ -168,7 +168,7 @@ async function sendCampaign(job: Job, params: CampaignParameters, apiKeys: Recor
   for (const contact of contacts) {
     try {
       if (!contact.data) continue
-      const phone = JSON.parse(await codec.decrypt(contact.data as string, password)).phone
+      const phone = (await contactCodec.decrypt(contact, password))?.phone
       if (!phone) continue
       if (areaCode && !String(phone).replace(/\D/g, "").startsWith(areaCode)) continue
       const result = await whatsapp.sendTemplate({

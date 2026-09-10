@@ -126,6 +126,15 @@ function clearPending(contactId: string) {
   d.items = []
 }
 
+// The contact row is gone for good (eg. /deleteme): drop it from the cache instead of patching it,
+// so the next message recreates it from scratch.
+function evictContact(contactId: string) {
+  const key = idToKey.get(contactId)
+  if (!key) return
+  store.delete(key)
+  idToKey.delete(contactId)
+}
+
 export async function loadApiKeys(team: string): Promise<APIKeys | null> {
   const ak = await supabase.from("api_keys").select("*").eq("team_id", team)
   if (!ak.data || ak.error) return null
@@ -135,4 +144,4 @@ export async function loadApiKeys(team: string): Promise<APIKeys | null> {
   }, {}) as APIKeys
 }
 
-export const cache = { getContact, init, updateContact, clearPending }
+export const cache = { getContact, init, updateContact, clearPending, evictContact }

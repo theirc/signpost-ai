@@ -7,6 +7,7 @@ import { mock } from "./workers/mock"
 import { response } from "./workers/response"
 import { schema } from "./workers/schema"
 import { search } from "./workers/search"
+import { cmssearch } from "./workers/cmssearch"
 import { text } from "./workers/text"
 import { api } from "./workers/api"
 import { documentSelector } from "./workers/documentselector"
@@ -66,6 +67,7 @@ export const workerRegistry = {
   text,
 
   search,
+  cmssearch,
   combine,
   documentSelector,
   documentGenerator,

@@ -6,33 +6,30 @@ declare global {
     id: string
     version?: number
     config?: PlaybookConfig                         // settings of the playbook, as opposed to steps of the conversation
-    interrupts?: PlaybookInterrupt[]                // checked before anything else. The first pending one takes the turn
     main: PlaybookItem[]                            // the orchestrator. Always present, the session starts on its first item
-    flows?: { [flow: string]: PlaybookItem[] }      // satellite flows, entered with call: and left with return. "main" is reserved
-    globals?: PlaybookGuard[]                       // deterministic guards, always active, matched on the raw text
+    flows?: { [flow: string]: PlaybookItem[] }      // the conversation moves into one with a goto and leaves the same way. "main" is reserved
     defaults?: { on_no_match?: PlaybookNoMatch }
   }
 
   interface PlaybookConfig {
     model?: string                                  // the model every ai item of this playbook runs on
+    on_lost?: PlaybookCursor                        // where a cursor that no longer resolves goes, because the playbook was
+    //                                                 edited with the conversation live. Usually the main menu, or the top.
+    //                                                 Omitted = main[0]. The runtime does not walk and does not guess:
+    //                                                 deleting an item that conversations are parked on is a save time error
   }
 
   /**
-   * A terms of service, a consent screen: something that must run once and give the conversation back
-   * where it was. It lives outside the path of the cursor, so nothing about the cursor remembers that it
-   * ran — its own flow writes the var its condition reads, and that is the one place where a var
-   * legitimately records progress. Everywhere else the cursor is the only record (see PlaybookItem.condition).
+   * A flow is a sequence, and every item of it is visited twice, in two different turns: entering it says
+   * its piece and the cursor rests there, and the next message comes back to that same item to be
+   * processed. Leaving the sequence takes an option the contact picked or a tool the model called — never
+   * the item itself, and never a condition.
    *
-   * Nothing about it is stored in the state: pending is derived from the condition on every turn, and
-   * while it is pending the conversation belongs to its flow
+   * What the second visit does is whatever the item declares: options to pick from, a set to capture into,
+   * or type "ai". An item that declares none of the three waits for an answer it cannot use, and the
+   * validator blocks it. Saying nothing is not allowed either: with nothing to say there is no question to
+   * answer, so nothing to wait for, and the walk goes over it
    */
-  interface PlaybookInterrupt {
-    condition: PlaybookCondition                    // true = pending. The flow it calls has to falsify it or it fires forever
-    then: PlaybookOutcome                           // "call:<flow>", so the return lands back on the exact item
-  }
-
-  // say is what makes an item wait: it emits and the cursor rests there until the next message arrives.
-  // An item without say is a routing item: it decides and moves on inside the same turn, emitting nothing
   interface PlaybookItem {
     id: string
     type?: "ai"                                     // absent = deterministic. An ai item always waits and never reasks
@@ -40,38 +37,51 @@ declare global {
     say?: string                                    // handlebars template rendered against vars
     prompt?: string                                 // ai item only: the instruction handed to the model. Same template
     options?: PlaybookOption[]                      // closed answers, emitted as the quick replies of the turn. On an ai item, its escapes
-    slot?: string                                   // captures the raw text into vars[slot]. The only way to store what the user wrote
-    condition?: PlaybookCondition                   // evaluated on entry, before say. A precondition about data, never about
-    //                                                 whether this item already ran: an item does not gate itself on a var it writes
-    then?: PlaybookOutcome                          // routing item: the branch taken now. Item with slot: where to go after the capture
-    else?: PlaybookOutcome                          // outcome when the condition is false
+    set?: string                                    // the var this item captures into. An item only captures if it names one,
+    //                                                 and it is the only way to store what the contact wrote rather than a literal.
+    //                                                 The option flavour of set writes literals; this one writes the message
+    condition?: PlaybookCondition                   // a filter, not a branch: false means this item does not run and the
+    //                                                 conversation moves to the next one. There is no else. On an item that
+    //                                                 captures, gating on its own var is the idiom for "we already have this
+    //                                                 and a reset should not ask again"
     on_no_match?: PlaybookNoMatch                   // overrides the playbook default. Only reachable on items with options
   }
 
   interface PlaybookOption {
     id?: string                                     // what the channel sends back when tapped. Derived from the label when omitted
-    label?: string                                  // button text, and the primary thing the typed message is matched against
-    match?: string[]                                // extra synonyms beyond the label. "*" is a catch-all
-    set?: { [key: string]: any }                    // writes vars when this option is picked
+    label?: string                                  // button text, and what a typed message is matched against
+    match?: string[]                                // other ways of saying the same label. The label always matches on its own,
+    //                                                 so this is only for synonyms. There is no catch-all: an option is a
+    //                                                 closed answer, and anything else is a no-match
+    condition?: PlaybookCondition                   // when it does not hold the option is not on offer: not drawn, and not
+    //                                                 selectable by typing its label either
+    set?: { [key: string]: any }                    // writes vars when this option is picked. Writing null is how it forgets one
     say?: string                                    // prepended to the say of the destination
-    then?: PlaybookOutcome
+    action?: PlaybookOutcome                        // what picking it does. Omitted means the item below
   }
 
-  interface PlaybookGuard {
-    match: string[]
-    set?: { [key: string]: any }
-    then?: PlaybookOutcome
-  }
-
+  // What goes in front of the question when nothing matched. There is no escalation and nothing is counted:
+  // an item with options is a closed question and it repeats until one is picked. The only way out is one
+  // of its own options
   interface PlaybookNoMatch {
-    policy: "reask"
-    max?: number
-    then?: PlaybookOutcome                          // where to go once the attempts run out
+    say?: string                                    // prepended to the say of the item, rendered like any other text
   }
 
-  // Besides these: "goto:<flow>.<item>" and "call:<flow>". Omitting an outcome means "next".
-  // "end" closes the session: the cursor goes null and the next message boots a fresh one
-  type PlaybookOutcome = LiteralUnion<"next" | "stay:reask" | "stay:silent" | "return" | "end">
+  /**
+   * What an option hands back to the runtime, and the only way anything moves the cursor.
+   *
+   * Stored already split, same reason as PlaybookCondition: the runtime parses nothing, and the type
+   * constrains what can be written. As a string a typo like "gotoo:main.menu" compiled and failed at
+   * runtime; now it does not compile. Omitting an outcome altogether still means next.
+   *
+   * Three cases, and each one moves the cursor. There is no call and no return, so entering another flow
+   * is a one way move; and there is no outcome that keeps the cursor where it is, because an item that
+   * said its piece and got an answer either moves on or stays without being asked to
+   */
+  type PlaybookOutcome =
+    | { type: "next" }                              // the following item of the array. The default when omitted
+    | { type: "reset" }                             // back to the first item of main, in this same turn. vars survive, so every item already answered is skipped by its own condition
+    | { type: "goto", flow: string, item: string }  // jump. The same pair as a PlaybookCursor
 
   type PlaybookOperator = "==" | "!=" | ">" | ">=" | "<" | "<="
 
@@ -87,7 +97,6 @@ declare global {
   interface PlaybookInput {
     id?: string                                     // idempotency
     message?: string
-    received_at?: string
   }
 
   // The whole call in one object, assembled for the turn and thrown away: what survives is the PlaybookTurn.
@@ -157,11 +166,8 @@ declare global {
 
   interface PlaybookState {
     playbook_version?: number
-    rev: number
     cursor: PlaybookCursor | null                   // null = closed session. The next message boots a fresh one
-    stack: PlaybookCursor[]                         // return points pushed by call
-    vars: { [key: string]: any }
-    attempts: number                                // reset on every cursor change
+    vars: { [key: string]: any }                    // what is known about the contact. Nothing in the language clears them: a reset moves the cursor, and forgetting a datum is a set to null
     last_inbound_id?: string
   }
 
@@ -169,10 +175,10 @@ declare global {
     seq: number
     flow?: string
     item?: string
-    layer?: "boot" | "duplicate" | "interrupt" | "global" | "item" | "ai" | "no_match" | "enter" | "recover" | "template"
+    layer?: "boot" | "duplicate" | "item" | "ai" | "no_match" | "enter" | "lost" | "template"
     option?: string
     outcome?: string
-    note?: string                                   // requires, exhausted budget, resolution errors
+    note?: string                                   // filtered items, template holes, resolution errors
   }
 
   interface PlaybookTurn {

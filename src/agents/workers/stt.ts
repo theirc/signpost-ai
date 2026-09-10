@@ -44,7 +44,8 @@ async function execute(worker: STTWorker, { apiKeys }: AgentParameters) {
       })
       
       // Determine extension from Content-Type header or URL
-      const contentType = response.headers['content-type']
+      const contentTypeHeader = response.headers['content-type']
+      const contentType = typeof contentTypeHeader === 'string' ? contentTypeHeader : undefined
       if (contentType?.startsWith('audio/')) {
         const mimeMatch = contentType.match(/audio\/([^;]+)/)
         if (mimeMatch) {
