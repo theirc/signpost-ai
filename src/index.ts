@@ -11,7 +11,7 @@ import { telerivetHook, type TelerivetHookRequest } from './integrations/teleriv
 import { whatsapp } from './agents/integrations/whatsapp'
 import { channels } from './agents/integrations/channels'
 
-const version = '2.0910.1556'
+const version = '2.0911.1540'
 
 const app = express()
 app.use(cors())
@@ -178,11 +178,16 @@ app.use('/decorsify/', async (req: Request, res: Response): Promise<void> => {
   }
 
   try {
+    // express.json()/urlencoded() only consume the stream when the content-type matches, leaving req.body
+    // as {} for anything else (e.g. multipart file uploads). For those, forward the untouched request
+    // stream instead, so the original body (boundary, file bytes) reaches the target unchanged.
+    const bodyAlreadyParsed = req.is('json') || req.is('urlencoded')
+
     const config: AxiosRequestConfig = {
       method: req.method as any,
       url: targetUrl,
       headers: { ...req.headers, host: new URL(targetUrl).host },
-      data: ['GET', 'HEAD'].includes(req.method) ? undefined : req.body,
+      data: ['GET', 'HEAD'].includes(req.method) ? undefined : (bodyAlreadyParsed ? req.body : req),
       params: req.query,
       timeout: 120000,
       responseType: 'stream',
