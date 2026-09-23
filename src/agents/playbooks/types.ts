@@ -36,7 +36,8 @@ declare global {
     intent?: string                                 // prose for the human author and for the AI that edits later. The runtime ignores it
     say?: string                                    // handlebars template rendered against vars
     prompt?: string                                 // ai item only: the instruction handed to the model. Same template
-    options?: PlaybookOption[]                      // closed answers, emitted as the quick replies of the turn. On an ai item, its escapes
+    options?: PlaybookOption[]                      // closed answers, emitted as the quick replies of the turn. An ai item
+    //                                                 declares none: the model attends every message and the exit word is the way out
     set?: string                                    // the var this item captures into. An item only captures if it names one,
     //                                                 and it is the only way to store what the contact wrote rather than a literal.
     //                                                 The option flavour of set writes literals; this one writes the message
