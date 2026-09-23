@@ -245,6 +245,8 @@ export function buildWorker(w: WorkerConfig) {
         conditionValue1 ||= ""
         if (typeof value !== "string") value = `${value}`
         if (typeof conditionValue1 !== "string") conditionValue1 = `${conditionValue1}`
+        value = value.toLowerCase()
+        conditionValue1 = conditionValue1.toLowerCase()
 
         if (operator === "equals") return conditionValue1 == value
         if (operator === "notEquals") return conditionValue1 != value

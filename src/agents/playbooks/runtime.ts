@@ -3,6 +3,10 @@ import Handlebars from "handlebars"
 const NEXT: PlaybookOutcome = { type: "next" }
 const RESET: PlaybookOutcome = { type: "reset" }
 
+// The whole escape of an ai item, which declares no options. A stand-in until the model can leave
+// through a tool, and the reason it is a literal and not authorable: nobody should be able to get it wrong
+const EXIT = "exit"
+
 type Ctx = PlaybookRequest & {
   texts: string[]
   trace: PlaybookTrace[]
@@ -79,8 +83,10 @@ function answerItem(ctx: Ctx, item: PlaybookItem, message: string): PlaybookOutc
 
 async function answerAI(ctx: Ctx, item: PlaybookItem, message: string): Promise<PlaybookOutcome | null> {
 
-  const option = pick(ctx, item, message)
-  if (option) return take(ctx, option)
+  if (normalize(message) === EXIT) {
+    trace(ctx, { layer: "ai", outcome: "next", note: "the contact typed exit" })
+    return NEXT
+  }
 
   if (!ctx.ai) {
     trace(ctx, { layer: "ai", note: "no ai adapter was passed" })

@@ -194,7 +194,7 @@ async function execute(worker: PromptAgentWorker, p: AgentParameters) {
   ${instructions}
   `
 
-  history.push(user(input || ""))
+  if (input) history.push(user(input))
 
   const handoffs = []
   for (const handoffAgent of handoffAgents) {

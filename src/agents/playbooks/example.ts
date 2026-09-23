@@ -6,7 +6,8 @@
  * on offer sometimes, and an ai item.
  *
  * There is no call and no return. The callback question is written once per country flow, which is less
- * to read than a stack, and every item leaves the same way anything else does: through an option.
+ * to read than a stack, and every item with options leaves through one of them. The ai item has none, so
+ * it leaves through the exit word.
  */
 
 export const examplePlaybook: Playbook = {
@@ -124,14 +125,12 @@ export const examplePlaybook: Playbook = {
       {
         id: "qa",
         type: "ai",
-        intent: "Open questions. The escape is declared as an option, so leaving never depends on the model",
+        intent: "Open questions. No options, so no quick replies: the exit word is the only way out until a tool can do it",
         // Both texts are authored and both interpolate. say is emitted once, on entry;
-        // prompt is never emitted, it goes to the adapter on every message that lands here
-        say: "Go ahead, ask me anything about services in {{country}}.",
-        prompt: "You are the Signpost desk in {{country}}. Answer briefly and only about available services. Say so when you do not know.",
-        options: [
-          { label: "Back to the menu", match: ["done", "thanks", "that is all"], action: { type: "goto", flow: "greece", item: "menu" } },
-        ],
+        // prompt is never emitted, it goes to the adapter on every message that lands here.
+        // Both mention the exit because nothing is drawn: with no options there is no button to see
+        say: "Go ahead, ask me anything about services in {{country}}. Type exit when you are done.",
+        prompt: "You are the Signpost desk in {{country}}. Answer briefly and only about available services. Say so when you do not know. Close every answer by telling the contact to type exit to leave.",
       },
       {
         // Written out here and again in italy, which is the trade the removal of call bought: two short

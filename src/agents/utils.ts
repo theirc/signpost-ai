@@ -30,14 +30,11 @@ export function createModel(apiKeys: APIKeys, modelName: string) {
   let model: any = null
 
   if (provider === "openai") {
-    // gpt-5/o* reject reasoning_effort when tools are present on
-    // /v1/chat/completions, so opt out.
-    const needsEffortOptOut = modelID.startsWith("gpt-5") || modelID.startsWith("o")
-    model = createOpenAI({ apiKey })(
-      modelID,
-      // SDK types this low|medium|high; the API accepts "none".
-      needsEffortOptOut ? { reasoningEffort: "none" as any } : undefined,
-    )
+    // Reasoning models (gpt-5*/o*) reject function tools on /v1/chat/completions;
+    // they need the responses API instead.
+    const isReasoningModel = modelID.startsWith("gpt-5") || modelID.startsWith("o")
+    const openai = createOpenAI({ apiKey })
+    model = isReasoningModel ? openai.responses(modelID) : openai(modelID)
   } else if (provider === "anthropic") {
     model = createAnthropic({
       apiKey,
