@@ -1,7 +1,7 @@
-import { step } from "./runtime"
+import { play } from "./runtime"
 
 export const playbooks = {
-  step,
+  play,
 }
 
 export { examplePlaybook } from "./example"

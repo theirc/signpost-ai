@@ -6,6 +6,7 @@ import { whatsapp } from "../whatsapp"
 import { base64ToBytes, bytesToBase64 } from "./base64"
 import { splitBreaks } from "./breaks"
 import { cache, loadApiKeys } from "./cache"
+import { matchCommand, processCommand } from "./commands"
 import { coordinate } from "./debounce"
 import { saveAndEvaluate } from "./conversation"
 
@@ -64,7 +65,9 @@ async function handle(channel: Channel, r: TelerivetHookRequest): Promise<string
   const content = (r.content || "").trim()
   const message_id = r.external_id
 
-  await whatsapp.sendTypingIndicator({ message_id, phone: channel.whatsapp_phoneid, token: channel.whatsapp_token })
+  const command = matchCommand(content)
+
+  if (!command) await whatsapp.sendTypingIndicator({ message_id, phone: channel.whatsapp_phoneid, token: channel.whatsapp_token })
 
   const input: ChannelInput = { content, files, audio, from, contactName: r.contact?.name, message_id }
 
@@ -79,6 +82,17 @@ async function handle(channel: Channel, r: TelerivetHookRequest): Promise<string
 
   const cached = await cache.getContact(integration, channel.team, apiKeys.codec)
   if (!cached) return "Could not resolve contact."
+
+  // Commands are handled here: no agent, no persistence, no evaluation.
+  if (command) {
+    const response = await processCommand(content, cached.contact.id)
+    try {
+      if (response) await sendMessage({ content: response, to_number: from, projectId: r.project_id, api_key: channel.telerivet_apikey, route_id: channel.telerivet_routeid ?? null })
+    } catch (err) {
+      return `Error sending command response: ${err}`
+    }
+    return ""
+  }
 
   const run = (i: ChannelInput) => runTelerivet(channel, cached, i, apiKeys, r.project_id)
   await coordinate(cached, channel.debounce_type, channel.debounce_time, input, run)

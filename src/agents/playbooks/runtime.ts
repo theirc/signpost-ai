@@ -1,265 +1,217 @@
-const ROUTING_BUDGET = 10
-const DEFAULT_MAX_ATTEMPTS = 2
+import Handlebars from "handlebars"
 
-type Ctx = {
-  playbook: Playbook
-  state: PlaybookState
+const NEXT: PlaybookOutcome = { type: "next" }
+const RESET: PlaybookOutcome = { type: "reset" }
+
+// The whole escape of an ai item, which declares no options. A stand-in until the model can leave
+// through a tool, and the reason it is a literal and not authorable: nobody should be able to get it wrong
+const EXIT = "exit"
+
+type Ctx = PlaybookRequest & {
   texts: string[]
   trace: PlaybookTrace[]
-  recoveries: number
+  reset: boolean
 }
 
-/**
- * Runs one deterministic turn of the playbook. Pure: clones the incoming state and returns the new one.
- * With a null state (or a null cursor) it boots the session: enters the first item of main and ignores the input.
- */
-export function step(playbook: Playbook, state: PlaybookState | null, input: PlaybookInput): PlaybookTurn {
+export async function play(request: PlaybookRequest): Promise<PlaybookTurn> {
 
-  const fresh: PlaybookState = {
-    playbook_version: playbook.version,
-    rev: 0,
-    cursor: null,
-    stack: [],
-    vars: {},
-    attempts: 0
-  }
+  request.playbook.main ||= []
+  request.input ||= {}
+  const { playbook, state, input } = request
+
+  const fresh: PlaybookState = { playbook_version: playbook.version, cursor: null, vars: {} }
 
   const ctx: Ctx = {
-    playbook,
+    ...request,
     state: state ? JSON.parse(JSON.stringify(state)) : fresh,
     texts: [],
     trace: [],
-    recoveries: 0
+    reset: false
   }
 
-  const message = input?.message || ""
+  if (!playbook.main.length) {
+    trace(ctx, { layer: "boot", note: "the main flow is empty" })
+    return finish(ctx)
+  }
 
-  if (input?.id && input.id === ctx.state.last_inbound_id) {
+  const message = input.message || ""
+
+  if (input.id && input.id === ctx.state.last_inbound_id) {
     trace(ctx, { layer: "duplicate", note: `inbound already processed: ${input.id}` })
-    return finish(ctx, false)
+    return finish(ctx)
   }
 
-  if (input?.id) ctx.state.last_inbound_id = input.id
+  if (input.id) ctx.state.last_inbound_id = input.id
 
-  // Session boot. A null cursor is both a session that never started and one closed by "end"
   if (!ctx.state.cursor) {
-    const items = flowItems(playbook, "main")
-    if (!items.length) {
-      trace(ctx, { layer: "boot", note: "the main flow is empty" })
-      return finish(ctx, false)
-    }
-    trace(ctx, { layer: "boot", flow: "main", item: items[0].id })
-    runChain(ctx, moveAndEnter(ctx, { flow: "main", item: items[0].id }))
+    trace(ctx, { layer: "boot", flow: "main", item: playbook.main[0].id })
+    runChain(ctx, { type: "goto", flow: "main", item: playbook.main[0].id }, null)
     return finish(ctx)
   }
 
-  // The playbook was edited while this conversation was live and the cursor no longer resolves.
-  // Restart instead of going mute. The message of this turn is dropped, same as on a boot
   const item = currentItem(ctx)
+
   if (!item) {
-    const target = recover(ctx, ctx.state.cursor)
-    if (target) runChain(ctx, moveAndEnter(ctx, target))
+    runChain(ctx, lost(ctx, ctx.state.cursor), null)
     return finish(ctx)
   }
-
-  // Level 1: global guards. The first one that claims the message wins and the other levels do not run
-  for (const guard of ctx.playbook.globals || []) {
-    if (!matches(guard.match, message)) continue
-    if (guard.set) Object.assign(ctx.state.vars, guard.set)
-    trace(ctx, { layer: "global", outcome: guard.then || "next" })
-    runChain(ctx, guard.then || "next")
-    return finish(ctx)
-  }
-
-  // Level 3: item interpretation (level 2, local escapes, does not exist yet).
-  // The label is the primary alias; the id is what the channel sends back when a button is tapped
-  const value = normalize(message)
-  const option = (item.options || []).find(o => matches(o.match, message) || (o.label && normalize(o.label) === value) || normalize(o.id) === value)
-
-  if (option) {
-    if (option.set) Object.assign(ctx.state.vars, option.set)
-    emit(ctx, option.say)
-    trace(ctx, { layer: "item", option: option.id, outcome: option.then || "next" })
-    runChain(ctx, option.then || "next")
-    return finish(ctx)
-  }
-
-  // A slot cannot fail, so it also absorbs whatever the options did not claim
-  if (item.slot) {
-    ctx.state.vars[item.slot] = message.trim()
-    trace(ctx, { layer: "item", outcome: item.then || "next", note: `slot ${item.slot}` })
-    runChain(ctx, item.then || "next")
-    return finish(ctx)
-  }
-
-  // Level 4: no-match policy. Only reachable on items with options
-  if (item.options?.length) {
-    const policy = item.on_no_match || ctx.playbook.defaults?.on_no_match || { policy: "reask" as const }
-    const max = policy.max ?? DEFAULT_MAX_ATTEMPTS
-    ctx.state.attempts++
-
-    if (ctx.state.attempts > max && policy.then) {
-      trace(ctx, { layer: "no_match", outcome: policy.then, note: `attempts ${ctx.state.attempts} > max ${max}` })
-      ctx.state.attempts = 0
-      runChain(ctx, policy.then)
-      return finish(ctx)
-    }
-
-    trace(ctx, { layer: "no_match", outcome: "stay:reask", note: `attempt ${ctx.state.attempts}/${max}` })
-    emit(ctx, item.say)
-    return finish(ctx)
-  }
-
-  // Absorbing item: it says something and offers nothing to match against. Only a global moves it
-  trace(ctx, { layer: "item", outcome: "stay:silent", note: "absorbing item" })
+  runChain(ctx, item.type === "ai" ? await answerAI(ctx, item, message) : answerItem(ctx, item, message), ctx.state.cursor)
   return finish(ctx)
+}
+
+function answerItem(ctx: Ctx, item: PlaybookItem, message: string): PlaybookOutcome | null {
+
+  const option = pick(ctx, item, message)
+  if (option) return take(ctx, option)
+
+  if (item.set) {
+    ctx.state.vars[item.set] = message.trim()
+    trace(ctx, { layer: "item", outcome: "next", note: `set ${item.set}` })
+    return NEXT
+  }
+
+  if (available(ctx, item).length) {
+    trace(ctx, { layer: "no_match", note: "nothing matched, asking again" })
+    emit(ctx, (item.on_no_match || ctx.playbook.defaults?.on_no_match)?.say)
+    emit(ctx, item.say)
+    return null
+  }
+
+  trace(ctx, { layer: "item", outcome: "next", note: "the item declares no way to consume a message" })
+  return NEXT
+}
+
+async function answerAI(ctx: Ctx, item: PlaybookItem, message: string): Promise<PlaybookOutcome | null> {
+
+  if (normalize(message) === EXIT) {
+    trace(ctx, { layer: "ai", outcome: "next", note: "the contact typed exit" })
+    return NEXT
+  }
+
+  if (!ctx.ai) {
+    trace(ctx, { layer: "ai", note: "no ai adapter was passed" })
+    return null
+  }
+
+  try {
+    const result = await ctx.ai({
+      model: ctx.playbook.config?.model,
+      prompt: interpolate(ctx, item.prompt || ""),
+      message,
+      vars: ctx.state.vars,
+      tools: ctx.tools
+    })
+
+    if (result?.text) ctx.texts.push(result.text)
+    trace(ctx, { layer: "ai", note: result?.text ? undefined : "the adapter returned no text" })
+  }
+  catch (e: any) {
+    trace(ctx, { layer: "ai", note: `the ai adapter failed: ${e?.message || e}` })
+  }
+
+  return null
+}
+
+function pick(ctx: Ctx, item: PlaybookItem, message: string): PlaybookOption | undefined {
+  const value = normalize(message)
+  if (!value) return undefined
+  return available(ctx, item).find(o => normalize(o.label) === value || optionId(o) === value || matches(o.match, message))
+}
+
+function take(ctx: Ctx, option: PlaybookOption): PlaybookOutcome {
+  if (option.set) Object.assign(ctx.state.vars, option.set)
+  emit(ctx, option.say)
+  trace(ctx, { layer: "item", option: optionId(option), outcome: label(option.action || NEXT) })
+  return option.action || NEXT
 }
 
 // ── Control ─────────────────────────────────────────────────────────────────
 
-// Applies the outcome and walks the chain of routing items until one of them says something
-function runChain(ctx: Ctx, outcome: PlaybookOutcome | null) {
+function runChain(ctx: Ctx, outcome: PlaybookOutcome | null, from: PlaybookCursor | null) {
+
   let pending = outcome
-  let budget = ROUTING_BUDGET
+  let at = from
 
   while (pending) {
-    if (budget-- <= 0) {
-      trace(ctx, { layer: "enter", note: `routing budget exhausted (${ROUTING_BUDGET})` })
-      return
+
+    if (pending.type === "goto") {
+      at = { flow: pending.flow, item: pending.item }
+      pending = enter(ctx, at)
+      continue
     }
 
-    if (pending === "stay:silent") return
-    if (pending === "stay:reask") {
-      emit(ctx, currentItem(ctx)?.say)
-      return
-    }
-    // Closing the session, not freezing it: the next message boots a fresh one from main
-    if (pending === "end") {
-      ctx.state.cursor = null
-      ctx.state.stack = []
-      return
+    if (pending.type === "reset") {
+      if (ctx.reset) {
+        trace(ctx, { layer: "enter", flow: at?.flow, item: at?.item, note: "a second reset in one turn: every item of main is filtered out" })
+        return
+      }
+      ctx.reset = true
+      at = { flow: "main", item: ctx.playbook.main[0].id }
+      pending = enter(ctx, at)
+      continue
     }
 
-    if (pending === "next") {
+    if (pending.type === "next") {
       // Array order defines what "next" means, and nothing else
-      const items = flowItems(ctx.playbook, ctx.state.cursor?.flow)
-      const next = items[items.findIndex(i => i.id === ctx.state.cursor?.item) + 1]
-      if (!next) {
-        trace(ctx, { layer: "enter", note: "no next item: the item is absorbing" })
-        return
+      const items = at ? flowItems(ctx.playbook, at.flow) : []
+      const next = items[items.findIndex(i => i.id === at?.item) + 1]
+
+      if (!at || !next) {
+        trace(ctx, { layer: "enter", flow: at?.flow, item: at?.item, outcome: "reset", note: "ran past the last item of the flow" })
+        pending = RESET
+        continue
       }
-      pending = moveAndEnter(ctx, { flow: ctx.state.cursor.flow, item: next.id })
+
+      at = { flow: at.flow, item: next.id }
+      pending = enter(ctx, at)
       continue
     }
 
-    if (pending === "return") {
-      const frame = ctx.state.stack.pop()
-      if (!frame) {
-        trace(ctx, { layer: "enter", note: "return with an empty stack" })
-        return
-      }
-      pending = moveAndEnter(ctx, frame)
-      continue
-    }
-
-    if (pending.startsWith("goto:")) {
-      const [flow, item] = pending.slice(5).split(".")
-      if (!flow || !item) {
-        trace(ctx, { layer: "enter", note: `malformed goto, expected goto:flow.item: ${pending}` })
-        return
-      }
-      pending = moveAndEnter(ctx, { flow, item })
-      continue
-    }
-
-    if (pending.startsWith("call:")) {
-      const flow = pending.slice(5)
-      const items = flowItems(ctx.playbook, flow)
-      if (!items.length) {
-        trace(ctx, { layer: "enter", note: `call to a missing or empty flow: ${flow}` })
-        return
-      }
-      ctx.state.stack.push({ ...ctx.state.cursor })
-      pending = moveAndEnter(ctx, { flow, item: items[0].id })
-      continue
-    }
-
-    trace(ctx, { layer: "enter", note: `unknown outcome: ${pending}` })
+    trace(ctx, { layer: "enter", flow: at?.flow, item: at?.item, note: `unknown action: ${(pending as any)?.type}` })
     return
   }
 }
 
-// Moves the cursor and enters the item. Returns the pending outcome, or null if the cursor rests here
-function moveAndEnter(ctx: Ctx, cursor: PlaybookCursor): PlaybookOutcome | null {
-  const item = getItem(ctx.playbook, cursor)
+function enter(ctx: Ctx, cursor: PlaybookCursor): PlaybookOutcome | null {
 
-  // Recurses at most once: recover only ever returns a cursor that resolves
-  if (!item) {
-    const target = recover(ctx, cursor)
-    if (!target) return null
-    return moveAndEnter(ctx, target)
+  const item = getItem(ctx.playbook, cursor)
+  if (!item) return lost(ctx, cursor)
+
+  if (item.condition && !meets(item.condition, ctx.state.vars)) {
+    trace(ctx, { ...cursor, layer: "enter", outcome: "next", note: `condition not met: ${item.condition.join(" ")}` })
+    return NEXT
+  }
+
+  if (!item.say && item.type !== "ai") {
+    trace(ctx, { ...cursor, layer: "enter", outcome: "next", note: "the item has nothing to say" })
+    return NEXT
   }
 
   ctx.state.cursor = { ...cursor }
-  ctx.state.attempts = 0
+  emit(ctx, item.say)
+  trace(ctx, { layer: "enter", note: "waiting for a message" })
+  return null
+}
 
-  if (item.condition && !meets(item.condition, ctx.state.vars)) {
-    const outcome = item.else || "next"
-    trace(ctx, { layer: "enter", outcome, note: `condition not met: ${item.condition.join(" ")}` })
-    return outcome
-  }
+function lost(ctx: Ctx, cursor: PlaybookCursor): PlaybookOutcome | null {
+  const target = ctx.playbook.config?.on_lost || { flow: "main", item: ctx.playbook.main[0].id }
 
-  // Saying something is what makes an item wait: the cursor rests here until the next message
-  if (item.say) {
-    emit(ctx, item.say)
-    trace(ctx, { layer: "enter", note: "waiting for a message" })
+  if (!getItem(ctx.playbook, target)) {
+    ctx.state.cursor = null
+    trace(ctx, { layer: "lost", note: `${cursor.flow}.${cursor.item} is gone and so is on_lost, closing the session` })
     return null
   }
 
-  const outcome = item.then || "next"
-  trace(ctx, { layer: "enter", outcome, note: "routing item" })
-  return outcome
-}
-
-// ── Recovery ────────────────────────────────────────────────────────────────
-
-/**
- * Resolves a cursor that no longer points anywhere, which happens when the playbook is edited
- * while conversations are live. Degrades one level at a time: the item is gone but the flow is still
- * there, so the flow restarts; the whole flow is gone, so the conversation restarts. vars survive
- * either way, so the conditions of the items walked on the way back land the contact where it was.
- * Returns null only when there is nowhere left to go, and then the session closes
- */
-function recover(ctx: Ctx, cursor: PlaybookCursor): PlaybookCursor | null {
-  ctx.recoveries++
-
-  // The item is gone but the flow is still there, so the flow restarts.
-  // The stack is left alone: the frames below still describe a valid return point
-  const items = flowItems(ctx.playbook, cursor.flow)
-  if (ctx.recoveries === 1 && items.length) {
-    trace(ctx, { layer: "recover", note: `missing item ${cursor.flow}.${cursor.item}, restarting the flow` })
-    return { flow: cursor.flow, item: items[0].id }
-  }
-
-  // Either the whole flow is gone, or restarting it landed on the same hole: the routing of a flow can
-  // point straight back at the deleted item. The frames point into a layout that no longer holds
-  const main = flowItems(ctx.playbook, "main")
-  if (ctx.recoveries <= 2 && main.length) {
-    ctx.state.stack = []
-    trace(ctx, { layer: "recover", note: `cannot resolve ${cursor.flow}.${cursor.item}, restarting the conversation` })
-    return { flow: "main", item: main[0].id }
-  }
-
-  // main routes into the hole as well. Close the session: the next message boots a fresh one
-  ctx.state.cursor = null
-  ctx.state.stack = []
-  trace(ctx, { layer: "recover", note: `unrecoverable from ${cursor.flow}.${cursor.item}, closing the session` })
-  return null
+  trace(ctx, { layer: "lost", note: `${cursor.flow}.${cursor.item} is gone, going to ${target.flow}.${target.item}` })
+  return { type: "goto", flow: target.flow, item: target.item }
 }
 
 // ── Playbook reads ──────────────────────────────────────────────────────────
 
-// "main" is a reserved cursor key that addresses playbook.main; anything else is a satellite flow
+function available(ctx: Ctx, item: PlaybookItem | null): PlaybookOption[] {
+  return (item?.options || []).filter(o => !o.condition || meets(o.condition, ctx.state.vars))
+}
+
 function flowItems(playbook: Playbook, flow: string): PlaybookItem[] {
   return (flow === "main" ? playbook.main : playbook.flows?.[flow]) || []
 }
@@ -274,7 +226,6 @@ function currentItem(ctx: Ctx): PlaybookItem | null {
 
 // ── Pure helpers ────────────────────────────────────────────────────────────
 
-// Trim, lowercase, no diacritics and no emojis, so a label like "🏥 Medical care" matches "medical care"
 export function normalize(text: string): string {
   return (text || "")
     .toLowerCase()
@@ -285,18 +236,19 @@ export function normalize(text: string): string {
     .trim()
 }
 
-function matches(list: string[] | undefined, text: string): boolean {
-  const value = normalize(text)
-  return (list || []).some(m => m === "*" || normalize(m) === value)
+function optionId(option: PlaybookOption): string {
+  return option.id || normalize(option.label)
 }
 
-// Closed vocabulary, stored already split: ["var"] is a truth test,
-// ["var", test] asks about presence, ["var", op, value] compares
+function matches(list: string[] | undefined, text: string): boolean {
+  const value = normalize(text)
+  return !!value && (list || []).some(m => normalize(m) === value)
+}
+
 function meets(condition: PlaybookCondition, vars: { [key: string]: any }): boolean {
   const left = vars?.[condition[0]]
   if (condition.length === 1) return !!left
 
-  // Presence, not truth: 0 and false are set. Writing null or "" with set is how an item invalidates a var
   if (condition.length === 2) {
     const set = left !== undefined && left !== null && left !== ""
     return condition[1] === "isSet" ? set : !set
@@ -317,29 +269,57 @@ function meets(condition: PlaybookCondition, vars: { [key: string]: any }): bool
 
 // ── Turn accumulators ───────────────────────────────────────────────────────
 
+const templates = new Map<string, ReturnType<typeof Handlebars.compile>>()
+
+function compile(text: string, strict: boolean) {
+  const key = (strict ? "!" : "") + text
+  let template = templates.get(key)
+
+  if (!template) {
+    template = Handlebars.compile(text, { noEscape: true, strict })
+    templates.set(key, template)
+  }
+  return template
+}
+
+function interpolate(ctx: Ctx, text: string): string {
+  if (!text.includes("{{")) return text
+
+  try { return compile(text, true)(ctx.state.vars) }
+  catch (e: any) {
+    trace(ctx, { layer: "template", note: `${e?.message || e}` })
+    try { return compile(text, false)(ctx.state.vars) } catch { return text }
+  }
+}
+
 function emit(ctx: Ctx, text: string | undefined) {
   if (!text) return
-  ctx.texts.push(text.replace(/\{(\w+)\}/g, (_, key) => (ctx.state.vars?.[key] !== undefined ? String(ctx.state.vars[key]) : `{${key}}`)))
+  ctx.texts.push(interpolate(ctx, text))
+}
+
+function label(outcome: PlaybookOutcome): string {
+  return outcome.type === "goto" ? `goto:${outcome.flow}.${outcome.item}` : outcome.type
 }
 
 function trace(ctx: Ctx, entry: Omit<PlaybookTrace, "seq">) {
-  ctx.trace.push({ seq: ctx.trace.length, flow: ctx.state.cursor?.flow, item: ctx.state.cursor?.item, ...entry })
+  const full: PlaybookTrace = { seq: ctx.trace.length, flow: ctx.state.cursor?.flow, item: ctx.state.cursor?.item, ...entry }
+  ctx.trace.push(full)
+
+  if (!ctx.hooks?.onTrace) return
+  try { Promise.resolve(ctx.hooks.onTrace(full)).catch(() => { }) } catch { }
 }
 
-// Assembles the envelope: every text of the turn joined, plus the options of the item the cursor came to rest on
-function finish(ctx: Ctx, bump = true): PlaybookTurn {
-  if (bump) ctx.state.rev++
+function finish(ctx: Ctx): PlaybookTurn {
 
   const output: PlaybookOutput = {}
   if (!ctx.texts.length) return { output, state: ctx.state, trace: ctx.trace }
 
   output.response = ctx.texts.join("\n\n")
 
-  // The buttons ride on the message, so a turn that says nothing carries none
   const replies: PlaybookQuickReply[] = []
 
-  for (const option of currentItem(ctx)?.options || []) {
-    if (option.label) replies.push({ id: option.id, label: option.label })
+  for (const option of available(ctx, currentItem(ctx))) {
+    if (option.label) replies.push({ id: optionId(option), label: option.label })
   }
 
   if (replies.length) output.quick_replies = replies

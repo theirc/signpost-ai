@@ -762,13 +762,13 @@ export function createAgent(config: AgentConfig) {
     },
 
     async resetAgent(uid: string, contactId?: string) {
-      const idsToDelete = []
-      if (uid) idsToDelete.push(uid)
+      if (!uid) return
+      const idsToDelete = [uid]
       if (contactId) idsToDelete.push(contactId)
       if (idsToDelete.length > 0) {
         await supabase.from("states").delete().in("id", idsToDelete)
         await supabase.from("history").delete().in("uid", idsToDelete)
-        await supabase.from("events").delete().in("id", idsToDelete)
+        await supabase.from("messages").delete().in("contact", idsToDelete)
       }
       if (contactId) {
         await supabase.from('contacts').update({
@@ -777,7 +777,6 @@ export function createAgent(config: AgentConfig) {
           lasteval: null,
           summary: null,
         }).eq('id', contactId)
-        await supabase.from("messages").delete().eq("contact", contactId)
       }
     },
 
@@ -786,6 +785,26 @@ export function createAgent(config: AgentConfig) {
   return agent
 
 }
+
+export async function resetAgent(contactId?: string) {
+  if (!contactId) return
+  await supabase.from("states").delete().eq("id", contactId)
+  await supabase.from("history").delete().eq("uid", contactId)
+  await supabase.from("messages").delete().eq("contact", contactId)
+  await supabase.from('contacts').update({
+    evaluation: null,
+    severity: 0,
+    lasteval: null,
+    summary: null,
+    hitl: null,
+    hitled: null,
+    extractions: null,
+    internal_comments: null,
+    moderation_data: null,
+    no_reply_needed: null,
+  }).eq('id', contactId)
+}
+
 
 export function configureAgent(data: AgentConfig) {
 

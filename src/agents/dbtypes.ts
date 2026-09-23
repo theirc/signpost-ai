@@ -57,6 +57,8 @@ declare global {
     summary?: string
     severity?: number
     lasteval?: string
+    /** Last time the contact sent a message. Used by campaigns to skip inactive contacts. */
+    last_inbound_at?: string
     no_reply_needed?: boolean
     internal_comments?: MessageComment[]
     hitl?: boolean

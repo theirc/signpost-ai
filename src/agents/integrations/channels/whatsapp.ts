@@ -5,6 +5,7 @@ import { baseUrl } from "../whatsapp/config"
 import { bytesToBase64 } from "./base64"
 import { splitBreaks } from "./breaks"
 import { cache, loadApiKeys } from "./cache"
+import { matchCommand, processCommand } from "./commands"
 import { coordinate } from "./debounce"
 import { saveAndEvaluate } from "./conversation"
 import type { WhatsAppWebhookPayload } from "../whatsapp/hook"
@@ -85,12 +86,25 @@ async function handle(channel: Channel, payload: WhatsAppWebhookPayload): Promis
   const contactName = value?.contacts?.[0]?.profile?.name || ""
   content = content.trim()
 
-  await whatsapp.sendTypingIndicator({ message_id: message.id, phone: channel.whatsapp_phoneid, token: whatsapp_token })
+  const command = matchCommand(content)
+
+  if (!command) await whatsapp.sendTypingIndicator({ message_id: message.id, phone: channel.whatsapp_phoneid, token: whatsapp_token })
 
   const input: ChannelInput = { content, files, audio, from, contactName, message_id: message.id }
 
   const cached = await cache.getContact({ phone: from, name: contactName, type: "whatsapp" }, channel.team, apiKeys.codec)
   if (!cached) return "Could not resolve contact."
+
+  // Commands are handled here: no agent, no persistence, no evaluation.
+  if (command) {
+    const response = await processCommand(content, cached.contact.id)
+    try {
+      if (response) await whatsapp.send({ token: whatsapp_token, phone: channel.whatsapp_phoneid, to: from, message: response, message_id: message.id })
+    } catch (err) {
+      return `Error sending command response: ${err}`
+    }
+    return ""
+  }
 
   const run = (i: ChannelInput) => runWhatsapp(channel, cached, i, apiKeys)
   await coordinate(cached, channel.debounce_type, channel.debounce_time, input, run)

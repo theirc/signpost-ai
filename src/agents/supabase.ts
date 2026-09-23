@@ -479,6 +479,7 @@ export type Database = {
           hitled: boolean | null
           id: string
           internal_comments: Json | null
+          last_inbound_at: string | null
           lasteval: string | null
           moderation_data: string | null
           name: string | null
@@ -499,6 +500,7 @@ export type Database = {
           hitled?: boolean | null
           id: string
           internal_comments?: Json | null
+          last_inbound_at?: string | null
           lasteval?: string | null
           moderation_data?: string | null
           name?: string | null
@@ -519,6 +521,7 @@ export type Database = {
           hitled?: boolean | null
           id?: string
           internal_comments?: Json | null
+          last_inbound_at?: string | null
           lasteval?: string | null
           moderation_data?: string | null
           name?: string | null
